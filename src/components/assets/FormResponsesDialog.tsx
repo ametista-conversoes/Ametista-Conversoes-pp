@@ -12,13 +12,16 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = ['novo', 'qualificado', 'venda', 'perd
 interface FormResponsesDialogProps {
   trigger: ReactNode
   connectionId: string
+  /** Fase 35.2 — título real do formulário (diferente do nome do Ativo
+   * Digital) — quando disponível, aparece junto do título do diálogo. */
+  formTitle?: string | null
 }
 
 /** Vitrine das respostas estruturadas sincronizadas de um Google Forms
  * conectado (Fase 8.2) — confirma visualmente que a sincronização
  * trouxe pergunta+resposta reais (não só o Alerta genérico de sempre).
  * A síntese em % das perguntas fechadas fica pra Fase 8.3. */
-export function FormResponsesDialog({ trigger, connectionId }: FormResponsesDialogProps) {
+export function FormResponsesDialog({ trigger, connectionId, formTitle }: FormResponsesDialogProps) {
   const [open, setOpen] = useState(false)
   const { data: questions } = useFormQuestions(open ? connectionId : null)
   const { data: responses, isLoading } = useFormResponses(open ? connectionId : null)
@@ -31,7 +34,7 @@ export function FormResponsesDialog({ trigger, connectionId }: FormResponsesDial
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[80vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Respostas do formulário</DialogTitle>
+          <DialogTitle>Respostas do formulário{formTitle ? ` — ${formTitle}` : ''}</DialogTitle>
         </DialogHeader>
 
         {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}

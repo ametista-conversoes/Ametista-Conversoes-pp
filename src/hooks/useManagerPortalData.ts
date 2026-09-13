@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { aggregateAudienceInsights, type AudienceRawResponse } from '@/lib/audience-insights'
 import { fetchLinkedClientAccounts, linkClientAccount, resendClientInvite, unlinkClientAccount } from '@/lib/client-access'
 import type { PerformanceSnapshotRecord } from '@/hooks/useClientPortalData'
-import { listAdGroups, listCampaignInsights, type ExternalAdGroup } from '@/lib/integrations'
+import { disconnectIntegration, listAdGroups, listCampaignInsights, type ExternalAdGroup } from '@/lib/integrations'
 import type { ClientHealthScoreSnapshotRecord, ExecutiveKpiSnapshotRecord } from '@/lib/manager-metrics'
 import { computeRateMetrics } from '@/lib/metrics'
 import { fetchLatestUpdatedAt, latestOf } from '@/lib/nav-activity'
@@ -2021,6 +2021,11 @@ export interface DigitalAssetConnectionRecord {
   status: string
   project_id: string | null
   external_account_id: string | null
+  /** Fase 35.2 — nome de verdade do que a conexão aponta (hoje só
+   * preenchido pro Google Forms, com o título real do formulário) —
+   * diferente do nome do Ativo Digital, que é só um rótulo escolhido
+   * por quem cadastrou. */
+  external_account_name: string | null
   last_synced_at: string | null
 }
 
@@ -2033,9 +2038,26 @@ export function useDigitalAssetConnections() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('digital_asset_connections')
-        .select('id, digital_asset_id, provider, status, project_id, external_account_id, last_synced_at')
+        .select('id, digital_asset_id, provider, status, project_id, external_account_id, external_account_name, last_synced_at')
       if (error) throw error
       return data as DigitalAssetConnectionRecord[]
+    },
+  })
+}
+
+/** Fase 35.2 — desconecta a integração de um Ativo Digital (mantém a
+ * linha/histórico, chama a Edge Function porque a RLS de
+ * digital_asset_connections só libera SELECT pro app, quem escreve é
+ * sempre a service role). */
+export function useDisconnectIntegration() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (connectionId: string) => disconnectIntegration(connectionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['digital-asset-connections'] })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível desconectar.')
     },
   })
 }

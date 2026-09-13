@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Boxes, ExternalLink, Pencil, Plug, RefreshCw } from 'lucide-react'
+import { Boxes, ExternalLink, Pencil, Plug, RefreshCw, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { ConnectIntegrationDialog } from '@/components/assets/ConnectIntegrationDialog'
 import { AssetFormDialog } from '@/components/assets/AssetFormDialog'
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
 import type { DigitalAssetConnectionRecord, ManagerDigitalAssetRecord } from '@/hooks/useManagerPortalData'
-import { useDeleteDigitalAsset, useUpdateDigitalAssetStatus } from '@/hooks/useManagerPortalData'
+import { useDeleteDigitalAsset, useDisconnectIntegration, useUpdateDigitalAssetStatus } from '@/hooks/useManagerPortalData'
 import { syncIntegration } from '@/lib/integrations'
 import {
   connectionProviderLabels,
@@ -37,9 +37,15 @@ const CHANGEABLE_STATUSES = ['active', 'inactive', 'pending', 'revoked']
 export function AssetCard({ asset, deleteMode, connections }: AssetCardProps) {
   const updateStatus = useUpdateDigitalAssetStatus()
   const deleteAsset = useDeleteDigitalAsset()
+  const disconnectIntegration = useDisconnectIntegration()
   const [syncingId, setSyncingId] = useState<string | null>(null)
 
   const assetConnections = (connections ?? []).filter((c) => c.digital_asset_id === asset.id)
+  // Fase 35.2 — enquanto tiver uma conexão de verdade conectada, troca
+  // o botão "Conectar integração" por "Desconectar integração" (antes
+  // os dois ficavam juntos ao mesmo tempo, contraintuitivo — pedido
+  // explícito do usuário).
+  const connectedConnection = assetConnections.find((c) => c.status === 'connected')
 
   async function handleSync(connectionId: string) {
     setSyncingId(connectionId)
@@ -109,42 +115,65 @@ export function AssetCard({ asset, deleteMode, connections }: AssetCardProps) {
 
         <div className="space-y-1.5">
           {assetConnections.map((connection) => (
-            <div key={connection.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="flex items-center gap-1.5">
-                <Plug className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="text-muted-foreground">{connectionProviderLabels[connection.provider] ?? connection.provider}</span>
-                <Badge className={connectionStatusStyles[connection.status]}>
-                  {connectionStatusLabels[connection.status] ?? connection.status}
-                </Badge>
-              </span>
-              {connection.status === 'connected' &&
-                (connection.provider === 'google_ads' || connection.provider === 'meta_ads') &&
-                (connection.external_account_id ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                    disabled={syncingId === connection.id}
-                    onClick={() => handleSync(connection.id)}
-                  >
-                    <RefreshCw className={`h-3 w-3 ${syncingId === connection.id ? 'animate-spin' : ''}`} />
-                    Sincronizar agora
-                  </Button>
-                ) : (
-                  connection.provider === 'google_ads' && <SelectGoogleAdsAccountDialog connectionId={connection.id} />
-                ))}
+            <div key={connection.id} className="space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <Plug className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">{connectionProviderLabels[connection.provider] ?? connection.provider}</span>
+                  <Badge className={connectionStatusStyles[connection.status]}>
+                    {connectionStatusLabels[connection.status] ?? connection.status}
+                  </Badge>
+                </span>
+                {connection.status === 'connected' &&
+                  (connection.provider === 'google_ads' || connection.provider === 'meta_ads') &&
+                  (connection.external_account_id ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                      disabled={syncingId === connection.id}
+                      onClick={() => handleSync(connection.id)}
+                    >
+                      <RefreshCw className={`h-3 w-3 ${syncingId === connection.id ? 'animate-spin' : ''}`} />
+                      Sincronizar agora
+                    </Button>
+                  ) : (
+                    connection.provider === 'google_ads' && <SelectGoogleAdsAccountDialog connectionId={connection.id} />
+                  ))}
+              </div>
+              {/* Fase 35.2 — nome de verdade do formulário, diferente do
+                  nome do Ativo Digital (que é só um rótulo escolhido por
+                  quem cadastrou) — sem isso não dava pra saber qual
+                  formulário real cada Ativo "google forms N" representava. */}
+              {connection.provider === 'google_forms' && connection.external_account_name && (
+                <p className="pl-4 text-xs text-muted-foreground/70">Formulário: {connection.external_account_name}</p>
+              )}
             </div>
           ))}
-          <ConnectIntegrationDialog
-            asset={asset}
-            trigger={
-              <Button type="button" variant="outline" size="sm" className="h-7 w-full text-xs">
-                <Plug className="h-3.5 w-3.5" />
-                Conectar integração
-              </Button>
-            }
-          />
+          {connectedConnection ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 w-full text-xs text-destructive hover:text-destructive"
+              disabled={disconnectIntegration.isPending}
+              onClick={() => disconnectIntegration.mutate(connectedConnection.id)}
+            >
+              <Unplug className="h-3.5 w-3.5" />
+              {disconnectIntegration.isPending ? 'Desconectando...' : 'Desconectar integração'}
+            </Button>
+          ) : (
+            <ConnectIntegrationDialog
+              asset={asset}
+              trigger={
+                <Button type="button" variant="outline" size="sm" className="h-7 w-full text-xs">
+                  <Plug className="h-3.5 w-3.5" />
+                  Conectar integração
+                </Button>
+              }
+            />
+          )}
         </div>
 
         <div className="mt-auto flex items-center justify-between pt-3">

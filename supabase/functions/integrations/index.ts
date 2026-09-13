@@ -340,6 +340,24 @@ async function handleConnect(req: Request, url: URL) {
     return jsonResponse({ error: 'Informe o id ou o link do formulário' }, 400)
   }
 
+  // Fase 35.2 (bug real reportado pelo usuário) — rejeita na hora o
+  // engano mais comum: o link PÚBLICO de resposta (.../forms/d/e/<id>/
+  // viewform) tem um id diferente do link de EDIÇÃO
+  // (.../forms/d/<id>/edit), e `extractFormId` (mais abaixo) capturava
+  // só a letra solta "e" desse link, o que fazia a conexão terminar
+  // "Conectada" mesmo sem apontar pra formulário nenhum de verdade. Sem
+  // esperar o OAuth completar pra descobrir isso (ver validação depois
+  // do callback, mais abaixo).
+  if (provider === 'google_forms' && formIdInput && /\/forms\/d\/e\//.test(formIdInput)) {
+    return jsonResponse(
+      {
+        error:
+          'Esse é o link PÚBLICO de resposta (.../viewform). Cole o link de EDIÇÃO do formulário — abra o formulário pra editar as perguntas e copie a URL da barra de endereço (formato .../forms/d/<id>/edit).',
+      },
+      400,
+    )
+  }
+
   // Falha aqui dentro, com uma mensagem clara, em vez de mandar a
   // pessoa pro Google/Meta com um link quebrado (os dois recusam um
   // "client_id" vazio com um erro genérico, sem nem mostrar login).
@@ -567,7 +585,7 @@ async function handleCallback(url: URL) {
 
   const { data: connection, error: connectionError } = await supabase
     .from('digital_asset_connections')
-    .select('id, provider')
+    .select('id, provider, digital_asset_id, external_account_id')
     .eq('id', state)
     .maybeSingle()
   if (connectionError) return dbErrorRedirect('handleCallback: buscar conexão', connectionError)
@@ -663,6 +681,47 @@ async function handleCallback(url: URL) {
     } catch (err) {
       console.error('[integrations] handleCallback: erro inesperado ao descobrir conta do Meta Ads:', err)
       // segue sem quebrar a conexão — ver comentário acima
+    }
+  } else if (connection.provider === 'google_forms') {
+    // Fase 35.2 (bug real reportado pelo usuário): diferente de Google
+    // Ads/Meta (onde "descobrir a conta" é best-effort e nunca derruba
+    // a conexão), aqui a validação é OBRIGATÓRIA — o OAuth em si só
+    // confirma o login do Google, não tem nada a ver com qual
+    // formulário foi escolhido. Sem essa checagem, colar o link
+    // PÚBLICO (.../forms/d/e/<id>/viewform, que tem um id diferente do
+    // link de EDIÇÃO) fazia `extractFormId` capturar só "e" (o texto
+    // entre as duas barras) e a conexão ficava "Conectada" mesmo
+    // apontando pra um id que a API do Google Forms nunca vai achar.
+    const formId = connection.external_account_id
+    let formRes: Response | null = null
+    let formBody: Record<string, unknown> | null = null
+    try {
+      formRes = await fetch(`${GOOGLE_FORMS_API_BASE}/${formId}`, { headers: { Authorization: `Bearer ${accessToken}` } })
+      formBody = await formRes.json()
+    } catch (err) {
+      console.error('[integrations] handleCallback: erro inesperado validando o formulário do Google Forms:', err)
+    }
+
+    if (!formRes || !formRes.ok) {
+      await logServerError('integrations', 'handleCallback: validar formulário do Google Forms', formBody ?? { formId })
+      await supabase.from('digital_asset_connections').update({ status: 'error' }).eq('id', connection.id)
+      return callbackRedirect(
+        false,
+        'Não foi possível acessar esse formulário. Confirme que colou o link de EDIÇÃO do Google Forms (o que abre pra editar as perguntas) — o link público de resposta (.../viewform) não funciona aqui.',
+      )
+    }
+
+    // Nome de verdade do formulário (diferente do nome do Ativo
+    // Digital, que é só um rótulo escolhido por quem cadastrou) +
+    // link público de resposta, preenchido sozinho no "Link de acesso"
+    // do Ativo Digital pra dar pra abrir/reconhecer depois.
+    const info = formBody?.info as { title?: string; documentTitle?: string } | undefined
+    const title = info?.title ?? info?.documentTitle ?? null
+    const responderUri = (formBody?.responderUri as string | undefined) ?? null
+
+    await supabase.from('digital_asset_connections').update({ external_account_name: title }).eq('id', connection.id)
+    if (responderUri) {
+      await supabase.from('digital_assets').update({ url: responderUri }).eq('id', connection.digital_asset_id)
     }
   }
 
@@ -2584,6 +2643,37 @@ async function handleAgencyDisconnect(req: Request) {
   return jsonResponse({ ok: true })
 }
 
+/** Fase 35.2 — desconectar a integração de um Ativo Digital (antes só
+ * dava pra conectar, nunca desfazer — pedido explícito do usuário
+ * porque o botão "Conectar integração" continuava aparecendo mesmo já
+ * conectado). Mesmo espírito de handleAgencyDisconnect: mantém a linha
+ * (histórico de last_synced_at etc.), só reseta pro estado
+ * "desconectado" e apaga o token OAuth guardado. */
+async function handleDisconnect(req: Request) {
+  const auth = await requireAdminOrGestor(req)
+  if (auth instanceof Response) return auth
+
+  let body: { connection_id?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return jsonResponse({ error: 'Corpo inválido' }, 400)
+  }
+  if (!body.connection_id) return jsonResponse({ error: 'connection_id é obrigatório' }, 400)
+
+  const supabase = getServiceClient()
+
+  const { error: updateError } = await supabase
+    .from('digital_asset_connections')
+    .update({ status: 'disconnected', external_account_id: null, external_account_name: null, login_customer_id: null })
+    .eq('id', body.connection_id)
+  if (updateError) return dbErrorResponse('handleDisconnect', updateError)
+
+  await supabase.from('oauth_tokens').delete().eq('connection_id', body.connection_id)
+
+  return jsonResponse({ ok: true })
+}
+
 /** Fase 28 — só existe pro Meta: quando handleAgencyCallback não
  * conseguiu escolher o Business Manager sozinho (0 ou 2+ encontrados),
  * lista de novo pra escolha manual em Configurações > Agência. */
@@ -2650,6 +2740,7 @@ Deno.serve(async (req) => {
     if (req.method === 'POST' && url.pathname.endsWith('/select-agency-business')) return await handleSelectAgencyBusiness(req)
     if (req.method === 'POST' && url.pathname.endsWith('/link-agency-account')) return await handleLinkAgencyAccount(req)
     if (req.method === 'POST' && url.pathname.endsWith('/agency-disconnect')) return await handleAgencyDisconnect(req)
+    if (req.method === 'POST' && url.pathname.endsWith('/disconnect')) return await handleDisconnect(req)
     if (req.method === 'GET' && url.pathname.endsWith('/connect')) return await handleConnect(req, url)
     if (req.method === 'GET' && url.pathname.endsWith('/callback')) return await handleCallback(url)
     if (req.method === 'GET' && url.pathname.endsWith('/campaigns')) return await handleListCampaigns(req, url)
@@ -2663,7 +2754,7 @@ Deno.serve(async (req) => {
     return jsonResponse(
       {
         error:
-          'Rota não encontrada. Use /agency-connect, /agency-accounts, /agency-businesses, /select-agency-business, /link-agency-account, /agency-disconnect, /connect, /callback, /campaigns, /ad-groups, /campaign-insights, /accounts, /select-account, /sync, /sync-all ou /forms-webhook.',
+          'Rota não encontrada. Use /agency-connect, /agency-accounts, /agency-businesses, /select-agency-business, /link-agency-account, /agency-disconnect, /disconnect, /connect, /callback, /campaigns, /ad-groups, /campaign-insights, /accounts, /select-account, /sync, /sync-all ou /forms-webhook.',
       },
       404,
     )

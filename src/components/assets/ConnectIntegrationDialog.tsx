@@ -84,7 +84,7 @@ export function ConnectIntegrationDialog({ trigger, asset }: ConnectIntegrationD
 
   async function handleConnectGoogleForms() {
     if (!formId.trim()) {
-      toast.error('Cole o id ou o link do formulário.')
+      toast.error('Cole o link de edição do formulário.')
       return
     }
 
@@ -129,12 +129,16 @@ export function ConnectIntegrationDialog({ trigger, asset }: ConnectIntegrationD
           {provider === 'google_forms' && (
             <>
               <div className="space-y-2">
-                <Label>Id ou link do formulário</Label>
+                <Label>Link de edição do formulário</Label>
                 <Input
-                  placeholder="https://docs.google.com/forms/d/..."
+                  placeholder="https://docs.google.com/forms/d/.../edit"
                   value={formId}
                   onChange={(e) => setFormId(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Precisa ser o link de EDIÇÃO (abra o formulário pra editar as perguntas e copie a URL da barra de
+                  endereço) — o link público de resposta (.../viewform) não funciona aqui.
+                </p>
               </div>
               <p className="text-xs text-muted-foreground">Você vai ser levado pra tela de login do Google pra autorizar o acesso.</p>
             </>

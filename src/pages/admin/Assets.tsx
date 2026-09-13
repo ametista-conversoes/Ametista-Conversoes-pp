@@ -239,6 +239,14 @@ export default function Assets() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {asset!.name} · {asset!.client?.name ?? 'Cliente'}
                       </p>
+                      {/* Fase 35.2 — nome de verdade do formulário (o
+                          "asset!.name" acima é só o rótulo do Ativo
+                          Digital, escolhido por quem cadastrou — sem
+                          isso não dava pra saber qual formulário real
+                          cada Ativo representava). */}
+                      {connection.provider === 'google_forms' && connection.external_account_name && (
+                        <p className="mt-0.5 text-xs text-purple-300">Formulário: {connection.external_account_name}</p>
+                      )}
                       <p className="mt-1 text-xs text-muted-foreground/70">
                         Última sincronização: {formatDateTime(connection.last_synced_at)}
                       </p>
@@ -247,6 +255,7 @@ export default function Assets() {
                       {connection.status === 'connected' && connection.provider === 'google_forms' && (
                         <FormResponsesDialog
                           connectionId={connection.id}
+                          formTitle={connection.external_account_name}
                           trigger={
                             <Button type="button" variant="outline" size="sm" className="h-7 text-xs">
                               <ListChecks className="h-3.5 w-3.5" />

@@ -40,6 +40,20 @@ export interface SyncIntegrationResult {
   syncedResponses?: number
 }
 
+/** Fase 35.2 — desconecta a integração de um Ativo Digital (mantém a
+ * linha/histórico, só reseta pro estado "desconectado" e apaga o token
+ * OAuth guardado no Vault). Mesmo padrão de `disconnectAgencyProvider`,
+ * só que por conexão de Ativo Digital em vez de conta da agência. */
+export async function disconnectIntegration(connectionId: string): Promise<void> {
+  const res = await fetchFriendly(`${FUNCTIONS_BASE}/disconnect`, {
+    method: 'POST',
+    headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ connection_id: connectionId }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Não foi possível desconectar.')
+}
+
 export async function syncIntegration(connectionId: string): Promise<SyncIntegrationResult> {
   const res = await fetchFriendly(`${FUNCTIONS_BASE}/sync`, {
     method: 'POST',
