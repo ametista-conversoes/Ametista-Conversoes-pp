@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   effectiveActivityCompleted,
   effectiveTaskStatus,
+  isCompletionStale,
   isRecurrenceDueAgain,
   resolveRecurrenceDays,
 } from './recurrence'
@@ -90,5 +91,26 @@ describe('effectiveTaskStatus', () => {
 
   it('keeps a done task done while inside the recurrence window', () => {
     expect(effectiveTaskStatus('done', '30', '2026-09-25T00:00:00Z', 'validacao', now)).toBe('done')
+  })
+})
+
+describe('isCompletionStale', () => {
+  const now = new Date('2026-09-30T12:00:00Z')
+
+  it('is never stale without a completion date', () => {
+    expect(isCompletionStale(null, 1, now)).toBe(false)
+  })
+
+  it('is not stale within the grace period', () => {
+    expect(isCompletionStale('2026-09-30T06:00:00Z', 1, now)).toBe(false)
+  })
+
+  it('is stale once the grace period elapses', () => {
+    expect(isCompletionStale('2026-09-28T12:00:00Z', 1, now)).toBe(true)
+  })
+
+  it('defaults the grace period to 1 day', () => {
+    expect(isCompletionStale('2026-09-29T00:00:00Z', undefined, now)).toBe(true)
+    expect(isCompletionStale('2026-09-30T00:00:00Z', undefined, now)).toBe(false)
   })
 })

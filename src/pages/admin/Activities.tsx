@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ListChecks, Repeat, Trash2 } from 'lucide-react'
+import { Archive, ChevronDown, ChevronUp, ListChecks, Repeat, Trash2 } from 'lucide-react'
 import { NewActivityChecklistItemDialog } from '@/components/onboarding/NewActivityChecklistItemDialog'
 import { BulkDeleteToggle } from '@/components/shared/BulkDeleteToggle'
+import { ArchivedTasksDialog } from '@/components/tasks/ArchivedTasksDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,11 +13,14 @@ import type { ActivityChecklistItemRecord, ManagerClientRecord } from '@/hooks/u
 import {
   useAllClients,
   useActivityChecklistItems,
+  useArchivedActivityChecklistItems,
+  useAutoArchiveOldTasks,
   useDeleteActivityChecklistItems,
+  useRestoreActivityChecklistItem,
   useToggleActivityChecklistItem,
 } from '@/hooks/useManagerPortalData'
 import { useMarkNavSeen } from '@/hooks/useNavSeen'
-import { effectiveActivityCompleted, recurrenceShortLabels, type RecurrenceInterval } from '@/lib/recurrence'
+import { effectiveActivityCompleted, isCompletionStale, recurrenceShortLabels, type RecurrenceInterval } from '@/lib/recurrence'
 import { cn } from '@/lib/utils'
 
 const ALL_CLIENTS = 'all'
@@ -33,13 +37,31 @@ function platformVisible(item: ActivityChecklistItemRecord, client: ManagerClien
 
 export default function Activities() {
   useMarkNavSeen('/activities')
+  useAutoArchiveOldTasks()
   const { data: clients } = useAllClients()
   const { data: items, isLoading } = useActivityChecklistItems()
+  const { data: archivedItems } = useArchivedActivityChecklistItems()
   const toggleItem = useToggleActivityChecklistItem()
   const deleteItems = useDeleteActivityChecklistItems()
+  const restoreItem = useRestoreActivityChecklistItem()
   const [clientFilter, setClientFilter] = useState(ALL_CLIENTS)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Fase 36.1 — concluídas (recorrentes ou não) só ficam junto dos
+  // pendentes por 1 dia (`isCompletionStale`); depois disso somem da
+  // lista principal e só voltam se o gestor abrir esse toggle por
+  // cliente. Item recorrente sai do colapso sozinho quando a recorrência
+  // vence de novo (nada aqui precisa de "restaurar").
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
+
+  function toggleExpandedClient(clientId: string) {
+    setExpandedClients((prev) => {
+      const next = new Set(prev)
+      if (next.has(clientId)) next.delete(clientId)
+      else next.add(clientId)
+      return next
+    })
+  }
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Carregando...</p>
@@ -105,6 +127,18 @@ export default function Activities() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <ArchivedTasksDialog
+            tasks={(archivedItems ?? []).map((item) => ({ id: item.id, title: item.title, clientName: item.client?.name ?? null }))}
+            archivedAtById={Object.fromEntries((archivedItems ?? []).map((item) => [item.id, item.archived_at]))}
+            onRestore={(id) => restoreItem.mutateAsync(id)}
+            onDelete={(id) => deleteItems.mutateAsync([id])}
+            trigger={
+              <Button type="button" variant="outline" size="sm">
+                <Archive className="h-4 w-4" />
+                Arquivadas{(archivedItems?.length ?? 0) > 0 ? ` (${archivedItems!.length})` : ''}
+              </Button>
+            }
+          />
           <Select value={clientFilter} onValueChange={setClientFilter}>
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -141,8 +175,21 @@ export default function Activities() {
             ).length
             const percent = total > 0 ? Math.round((done / total) * 100) : 0
 
+            // Fase 36.1 — concluída (recorrente ou não) há mais de 1 dia
+            // some da lista principal, sem apagar nada; recorrente volta
+            // sozinha quando a recorrência vencer de novo, porque
+            // `isStale` recalcula tudo a cada render, não é um estado
+            // salvo em lugar nenhum. Modo de seleção sempre mostra tudo,
+            // mesmo padrão do filtro de plataforma acima.
+            const isStale = (item: ActivityChecklistItemRecord) =>
+              effectiveActivityCompleted(item.completed, item.recurrence_interval, item.completed_at, client.plan) &&
+              isCompletionStale(item.completed_at)
+            const staleCount = clientItems.filter(isStale).length
+            const isExpanded = expandedClients.has(client.id)
+            const visibleClientItems = selectMode || isExpanded ? clientItems : clientItems.filter((item) => !isStale(item))
+
             const itemsByGroup = new Map<string, ActivityChecklistItemRecord[]>()
-            for (const item of clientItems) {
+            for (const item of visibleClientItems) {
               const group = item.source_template_name ?? AVULSAS_LABEL
               const list = itemsByGroup.get(group) ?? []
               list.push(item)
@@ -178,6 +225,18 @@ export default function Activities() {
                       Mostrando {hiddenCount} item{hiddenCount > 1 ? 'ns' : ''} da outra plataforma, normalmente
                       ocultos, pra você poder apagar se precisar.
                     </p>
+                  )}
+                  {!selectMode && staleCount > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 -mx-1 justify-start text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => toggleExpandedClient(client.id)}
+                    >
+                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {isExpanded ? 'Ocultar' : 'Mostrar'} concluídas há mais de 1 dia ({staleCount})
+                    </Button>
                   )}
                   {Array.from(itemsByGroup.entries()).map(([groupName, groupItems]) => (
                     <div key={groupName} className="space-y-2">

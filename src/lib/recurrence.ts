@@ -118,3 +118,17 @@ export function effectiveTaskStatus(
   if (rawStatus !== 'done') return rawStatus
   return isRecurrenceDueAgain(recurrence, completedAt, plan, now) ? 'todo' : rawStatus
 }
+
+/** Fase 36.1 — um item concluído (recorrente ou não) só fica junto dos
+ * pendentes por `graceDays`; depois disso é candidato a entrar numa
+ * seção colapsável "Concluídas" (decisão de onde fica é de quem chama,
+ * essa função só diz se já passou do prazo). Item recorrente sai do
+ * colapso sozinho no instante em que `isRecurrenceDueAgain` vira
+ * verdadeiro — mesmo cálculo, sem precisar "desarquivar" nada, porque
+ * isso nunca é um arquivamento de verdade (não mexe no banco). */
+export function isCompletionStale(completedAt: string | null, graceDays = 1, now: Date = new Date()): boolean {
+  if (!completedAt) return false
+  const staleAt = new Date(completedAt)
+  staleAt.setDate(staleAt.getDate() + graceDays)
+  return now >= staleAt
+}

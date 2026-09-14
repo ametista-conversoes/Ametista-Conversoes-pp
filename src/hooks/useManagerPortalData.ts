@@ -1503,6 +1503,8 @@ export function useAutoArchiveOldTasks() {
         queryClient.invalidateQueries({ queryKey: ['manager-tasks-archived'] })
         queryClient.invalidateQueries({ queryKey: ['manager-client-tasks'] })
         queryClient.invalidateQueries({ queryKey: ['manager-client-tasks-archived'] })
+        queryClient.invalidateQueries({ queryKey: ['activity-checklist-items'] })
+        queryClient.invalidateQueries({ queryKey: ['activity-checklist-items-archived'] })
       }
     })
   }, [queryClient])
@@ -2023,6 +2025,7 @@ export interface ActivityChecklistItemRecord {
    * deve voltar a aparecer como pendente. */
   recurrence_interval: RecurrenceInterval | null
   completed_at: string | null
+  archived_at: string | null
   client: { name: string; plan: string | null } | null
 }
 
@@ -2033,11 +2036,52 @@ export function useActivityChecklistItems() {
       const { data, error } = await supabase
         .from('activity_checklist_items')
         .select(
-          'id, client_id, project_id, title, category, completed, step_order, source_template_name, platform_scope, recurrence_interval, completed_at, client:clients(name, plan)',
+          'id, client_id, project_id, title, category, completed, step_order, source_template_name, platform_scope, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
         )
+        .is('archived_at', null)
         .order('step_order', { ascending: true })
       if (error) throw error
       return data as unknown as ActivityChecklistItemRecord[]
+    },
+  })
+}
+
+/** Fase 36.1 — mesma ideia de `useArchivedTasks`/`useArchivedClientTasks`,
+ * pro lado de `activity_checklist_items`. Só item SEM recorrência chega
+ * aqui (ver `archive_stale_completed_tasks`) — item recorrente nunca é
+ * arquivado de verdade, só fica visualmente colapsado quando concluído
+ * (`isCompletionStale`, calculado em `Activities.tsx`/`ClientDetail.tsx`,
+ * sem nenhuma linha no banco envolvida). */
+export function useArchivedActivityChecklistItems() {
+  return useQuery({
+    queryKey: ['activity-checklist-items-archived'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('activity_checklist_items')
+        .select(
+          'id, client_id, project_id, title, category, completed, step_order, source_template_name, platform_scope, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
+        )
+        .not('archived_at', 'is', null)
+        .order('archived_at', { ascending: false })
+      if (error) throw error
+      return data as unknown as ActivityChecklistItemRecord[]
+    },
+  })
+}
+
+export function useRestoreActivityChecklistItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from('activity_checklist_items').update({ archived_at: null }).eq('id', itemId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity-checklist-items'] })
+      queryClient.invalidateQueries({ queryKey: ['activity-checklist-items-archived'] })
+    },
+    onError: () => {
+      toast.error('Não foi possível restaurar o item.')
     },
   })
 }
@@ -2098,6 +2142,7 @@ export function useDeleteActivityChecklistItems() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activity-checklist-items'] })
+      queryClient.invalidateQueries({ queryKey: ['activity-checklist-items-archived'] })
     },
     onError: () => {
       toast.error('Não foi possível excluir os itens selecionados.')

@@ -5,6 +5,8 @@ import {
   Building2,
   Calendar,
   CheckSquare,
+  ChevronDown,
+  ChevronUp,
   FolderKanban,
   ListChecks,
   Mail,
@@ -76,7 +78,7 @@ import {
 import { CASSIE_MODES, type CassieMode } from '@/lib/cassie-modes'
 import { formatDate, formatDateTime } from '@/lib/format'
 import { getClientRiskDetails } from '@/lib/client-risk'
-import { effectiveActivityCompleted, recurrenceShortLabels, type RecurrenceInterval } from '@/lib/recurrence'
+import { effectiveActivityCompleted, isCompletionStale, recurrenceShortLabels, type RecurrenceInterval } from '@/lib/recurrence'
 import { uploadClientLogo } from '@/lib/storage'
 import {
   clientStatusLabels,
@@ -120,6 +122,11 @@ export default function ClientDetail() {
   const isCassieSending = useCassieSending(id ?? '')
   const [cassieDraft, setCassieDraft] = useCassieDraft(id ?? '')
 
+  // Fase 36.1 — mesma ideia de Activities.tsx: concluída (recorrente ou
+  // não) some daqui depois de 1 dia, sem apagar nada; esse toggle só
+  // decide se mostra de novo, igual o "mostrar concluídas antigas" da
+  // aba Atividades.
+  const [showStaleActivities, setShowStaleActivities] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [selectedProject, setSelectedProject] = useState<ManagerProjectRecord | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<ManagerProjectRecord | null>(null)
@@ -224,6 +231,13 @@ export default function ClientDetail() {
   const clientGoals = (goals ?? []).filter((g) => g.client_id === client.id)
   const clientMeetings = (meetings ?? []).filter((m) => m.client_id === client.id)
   const clientActivityItems = (activityItems ?? []).filter((i) => i.client_id === client.id)
+  const isStaleActivity = (item: (typeof clientActivityItems)[number]) =>
+    effectiveActivityCompleted(item.completed, item.recurrence_interval, item.completed_at, client.plan) &&
+    isCompletionStale(item.completed_at)
+  const staleActivityCount = clientActivityItems.filter(isStaleActivity).length
+  const visibleClientActivityItems = showStaleActivities
+    ? clientActivityItems
+    : clientActivityItems.filter((item) => !isStaleActivity(item))
   const riskDetails = getClientRiskDetails(client.id, {
     incidents: incidents ?? [],
     alerts: alerts ?? [],
@@ -493,15 +507,27 @@ export default function ClientDetail() {
           </Card>
 
           <Card className="rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
-            <CardHeader className="p-0">
+            <CardHeader className="flex-row items-center justify-between p-0">
               <CardTitle className="flex items-center gap-2 text-base">
                 <ListChecks className="h-4 w-4 text-purple-400" />
                 Atividades
               </CardTitle>
+              {staleActivityCount > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowStaleActivities((v) => !v)}
+                >
+                  {showStaleActivities ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  {showStaleActivities ? 'Ocultar' : 'Mostrar'} concluídas ({staleActivityCount})
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="max-h-[560px] space-y-2 overflow-y-auto p-0 pt-4 pr-1">
-              {clientActivityItems.length === 0 && <p className="text-sm text-muted-foreground">Nenhum item.</p>}
-              {clientActivityItems.map((item) => {
+              {visibleClientActivityItems.length === 0 && <p className="text-sm text-muted-foreground">Nenhum item.</p>}
+              {visibleClientActivityItems.map((item) => {
                 const isDone = effectiveActivityCompleted(item.completed, item.recurrence_interval, item.completed_at, client.plan)
                 return (
                   <label
