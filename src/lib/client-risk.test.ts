@@ -25,6 +25,7 @@ function makeTask(overrides: Partial<ManagerTaskRecord> = {}): ManagerTaskRecord
     priority: 'medium',
     category: null,
     due_date: null,
+    archived_at: null,
     client: null,
     ...overrides,
   }

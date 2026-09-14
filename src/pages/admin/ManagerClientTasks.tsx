@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { CheckSquare, Plus, Search } from 'lucide-react'
+import { Archive, CheckSquare, Plus, Search } from 'lucide-react'
+import { ArchivedTasksDialog } from '@/components/tasks/ArchivedTasksDialog'
 import { ClientTaskFormDialog } from '@/components/tasks/ClientTaskFormDialog'
 import { ManagerClientTaskRow } from '@/components/tasks/ManagerClientTaskRow'
 import { DeleteModeToggle } from '@/components/shared/DeleteModeToggle'
@@ -7,7 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useAllClients, useAllClientTasks } from '@/hooks/useManagerPortalData'
+import {
+  useAllClients,
+  useAllClientTasks,
+  useArchivedClientTasks,
+  useAutoArchiveOldTasks,
+  useDeleteManagerClientTask,
+  useRestoreManagerClientTask,
+} from '@/hooks/useManagerPortalData'
 
 const ALL_CLIENTS = 'all'
 
@@ -18,8 +26,12 @@ const ALL_CLIENTS = 'all'
  * durante a Fase 30 (separação client_tasks/tasks) acabou ficando presa
  * lendo `public.tasks` filtrado por cliente por engano. */
 export default function ManagerClientTasks() {
+  useAutoArchiveOldTasks()
   const { data: clients } = useAllClients()
   const { data: tasks, isLoading } = useAllClientTasks()
+  const { data: archivedTasks } = useArchivedClientTasks()
+  const deleteTask = useDeleteManagerClientTask()
+  const restoreTask = useRestoreManagerClientTask()
   const [clientFilter, setClientFilter] = useState(ALL_CLIENTS)
   const [deleteMode, setDeleteMode] = useState(false)
   const [search, setSearch] = useState('')
@@ -44,6 +56,18 @@ export default function ManagerClientTasks() {
           <DeleteModeToggle active={deleteMode} onToggle={() => setDeleteMode((v) => !v)} />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <ArchivedTasksDialog
+            tasks={(archivedTasks ?? []).map((task) => ({ id: task.id, title: task.title, clientName: task.client?.name ?? null }))}
+            archivedAtById={Object.fromEntries((archivedTasks ?? []).map((task) => [task.id, task.archived_at]))}
+            onRestore={(id) => restoreTask.mutateAsync(id)}
+            onDelete={(id) => deleteTask.mutateAsync(id)}
+            trigger={
+              <Button type="button" variant="outline" size="sm">
+                <Archive className="h-4 w-4" />
+                Arquivadas{(archivedTasks?.length ?? 0) > 0 ? ` (${archivedTasks!.length})` : ''}
+              </Button>
+            }
+          />
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input

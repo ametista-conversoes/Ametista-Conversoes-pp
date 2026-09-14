@@ -1,21 +1,34 @@
 import { useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { Archive, Plus, Search } from 'lucide-react'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { KanbanTaskFormDialog } from '@/components/kanban/KanbanTaskFormDialog'
 import { BulkDeleteToggle } from '@/components/shared/BulkDeleteToggle'
+import { ArchivedTasksDialog } from '@/components/tasks/ArchivedTasksDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useAllClients, useAllTasks, useDeleteManagerTasks } from '@/hooks/useManagerPortalData'
+import {
+  useAllClients,
+  useAllTasks,
+  useArchivedTasks,
+  useAutoArchiveOldTasks,
+  useDeleteManagerTask,
+  useDeleteManagerTasks,
+  useRestoreManagerTask,
+} from '@/hooks/useManagerPortalData'
 import { useMarkNavSeen } from '@/hooks/useNavSeen'
 
 const ALL_CLIENTS = 'all'
 
 export default function Kanban() {
   useMarkNavSeen('/kanban')
+  useAutoArchiveOldTasks()
   const { data: clients } = useAllClients()
   const { data: tasks, isLoading } = useAllTasks()
+  const { data: archivedTasks } = useArchivedTasks()
   const deleteTasks = useDeleteManagerTasks()
+  const deleteTask = useDeleteManagerTask()
+  const restoreTask = useRestoreManagerTask()
   const [clientFilter, setClientFilter] = useState(ALL_CLIENTS)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -70,6 +83,18 @@ export default function Kanban() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <ArchivedTasksDialog
+            tasks={(archivedTasks ?? []).map((task) => ({ id: task.id, title: task.title, clientName: task.client?.name ?? null }))}
+            archivedAtById={Object.fromEntries((archivedTasks ?? []).map((task) => [task.id, task.archived_at]))}
+            onRestore={(id) => restoreTask.mutateAsync(id)}
+            onDelete={(id) => deleteTask.mutateAsync(id)}
+            trigger={
+              <Button type="button" variant="outline" size="sm">
+                <Archive className="h-4 w-4" />
+                Arquivadas{(archivedTasks?.length ?? 0) > 0 ? ` (${archivedTasks!.length})` : ''}
+              </Button>
+            }
+          />
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input

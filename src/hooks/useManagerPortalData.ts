@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
@@ -115,6 +116,7 @@ export interface ManagerTaskRecord {
   priority: string
   category: string | null
   due_date: string | null
+  archived_at: string | null
   client: { name: string } | null
 }
 
@@ -1252,11 +1254,51 @@ export function useAllTasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tasks')
-        .select('id, title, description, client_id, project_id, status, priority, category, due_date, client:clients(name)')
+        .select(
+          'id, title, description, client_id, project_id, status, priority, category, due_date, archived_at, client:clients(name)',
+        )
+        .is('archived_at', null)
         .order('due_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false })
       if (error) throw error
       return data as unknown as ManagerTaskRecord[]
+    },
+  })
+}
+
+/** Fase 36 — tarefas do Kanban arquivadas automaticamente (concluídas há
+ * mais de 30 dias, ver `archive_stale_completed_tasks`) ou à mão. Fora
+ * da lista padrão do Kanban, só aparece na tela "Arquivadas". */
+export function useArchivedTasks() {
+  return useQuery({
+    queryKey: ['manager-tasks-archived'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(
+          'id, title, description, client_id, project_id, status, priority, category, due_date, archived_at, client:clients(name)',
+        )
+        .not('archived_at', 'is', null)
+        .order('archived_at', { ascending: false })
+      if (error) throw error
+      return data as unknown as ManagerTaskRecord[]
+    },
+  })
+}
+
+export function useRestoreManagerTask() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const { error } = await supabase.from('tasks').update({ archived_at: null }).eq('id', taskId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-tasks-archived'] })
+    },
+    onError: () => {
+      toast.error('Não foi possível restaurar a tarefa.')
     },
   })
 }
@@ -1286,6 +1328,7 @@ export function useDeleteManagerTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-tasks-archived'] })
     },
     onError: () => {
       toast.error('Não foi possível excluir a tarefa.')
@@ -1303,6 +1346,7 @@ export function useDeleteManagerTasks() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-tasks-archived'] })
     },
     onError: () => {
       toast.error('Não foi possível excluir as tarefas selecionadas.')
@@ -1372,6 +1416,7 @@ export interface ManagerClientTaskRecord {
   due_date: string | null
   recurrence_interval: RecurrenceInterval | null
   completed_at: string | null
+  archived_at: string | null
   client: { name: string; plan: string | null } | null
 }
 
@@ -1382,14 +1427,85 @@ export function useAllClientTasks() {
       const { data, error } = await supabase
         .from('client_tasks')
         .select(
-          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, client:clients(name, plan)',
+          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
         )
+        .is('archived_at', null)
         .order('due_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false })
       if (error) throw error
       return data as unknown as ManagerClientTaskRecord[]
     },
   })
+}
+
+/** Fase 36 — mesma ideia de `useArchivedTasks`, pro lado de `client_tasks`.
+ * Itens com `recurrence_interval` nunca chegam aqui: o design da Fase 35
+ * já cicla a mesma linha pra sempre, então nunca são candidatos a
+ * arquivamento (ver `archive_stale_completed_tasks`). */
+export function useArchivedClientTasks() {
+  return useQuery({
+    queryKey: ['manager-client-tasks-archived'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_tasks')
+        .select(
+          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
+        )
+        .not('archived_at', 'is', null)
+        .order('archived_at', { ascending: false })
+      if (error) throw error
+      return data as unknown as ManagerClientTaskRecord[]
+    },
+  })
+}
+
+export function useRestoreManagerClientTask() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const { error } = await supabase.from('client_tasks').update({ archived_at: null }).eq('id', taskId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-client-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-client-tasks-archived'] })
+    },
+    onError: () => {
+      toast.error('Não foi possível restaurar a tarefa.')
+    },
+  })
+}
+
+/** Fase 36 — dispara `archive_stale_completed_tasks()` uma vez por
+ * carregamento de página (Kanban e "Tarefas do Cliente" chamam este
+ * mesmo hook — a função arquiva as duas tabelas juntas de qualquer dos
+ * dois lugares, então não importa qual tela o gestor abriu primeiro).
+ * Sem cron: é assim que "automático" funciona aqui — silencioso na
+ * maioria das vezes, só avisa quando realmente arquivou algo. */
+export function useAutoArchiveOldTasks() {
+  const queryClient = useQueryClient()
+  const ranRef = useRef(false)
+
+  useEffect(() => {
+    if (ranRef.current) return
+    ranRef.current = true
+
+    supabase.rpc('archive_stale_completed_tasks').then(({ data, error }) => {
+      if (error) return
+      const archivedCount = typeof data === 'number' ? data : 0
+      if (archivedCount > 0) {
+        toast.info(
+          archivedCount === 1
+            ? '1 tarefa concluída há mais de 30 dias foi arquivada automaticamente.'
+            : `${archivedCount} tarefas concluídas há mais de 30 dias foram arquivadas automaticamente.`,
+        )
+        queryClient.invalidateQueries({ queryKey: ['manager-tasks'] })
+        queryClient.invalidateQueries({ queryKey: ['manager-tasks-archived'] })
+        queryClient.invalidateQueries({ queryKey: ['manager-client-tasks'] })
+        queryClient.invalidateQueries({ queryKey: ['manager-client-tasks-archived'] })
+      }
+    })
+  }, [queryClient])
 }
 
 /** Mesma RPC que o Portal Cliente usa (`set_client_task_status`) — ela
@@ -1420,6 +1536,7 @@ export function useDeleteManagerClientTask() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-client-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-client-tasks-archived'] })
     },
     onError: () => {
       toast.error('Não foi possível excluir a tarefa.')
