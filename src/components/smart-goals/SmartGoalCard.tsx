@@ -6,7 +6,7 @@ import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
 import { useClientLeadStatusCounts, useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
 import { formatDate, getGoalDeadlineStatus } from '@/lib/format'
-import { leadCountForMetric } from '@/lib/lead-metrics'
+import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
 import {
   goalDeadlineStatusLabels,
   goalDeadlineStatusStyles,
@@ -28,12 +28,15 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
   const deadlineStatus = getGoalDeadlineStatus(goal.target_date, goal.status)
   const deleteGoal = useDeleteSmartGoal()
 
-  // Fase 35 — "Leads Qualificados"/"Vendas" são alimentados de verdade
-  // pelo status marcado em cada resposta de formulário (Parte 2 do
-  // Fechamento do Loop de Venda); mostra a contagem real ao lado do
+  // Fase 35/36.2 — "Leads"/"Leads Qualificados"/"Vendas" são alimentados
+  // de verdade pelo status marcado em cada resposta de formulário (Parte
+  // 2 do Fechamento do Loop de Venda); mostra a contagem real ao lado do
   // valor atual (que continua editável manualmente, igual às outras
-  // métricas) pra confirmar de relance se está desatualizado.
-  const isLeadMetric = goal.metric_type === 'leads_qualificados' || goal.metric_type === 'vendas'
+  // métricas) pra confirmar de relance se está desatualizado. "Leads"
+  // (bruto) conta QUALQUER resposta, sem validação — o rótulo deixa
+  // isso explícito (ver leadCountLabel) pra não ser confundido com um
+  // lead de verdade.
+  const isLeadMetric = isLeadCountMetric(goal.metric_type)
   const leadCounts = useClientLeadStatusCounts(isLeadMetric ? goal.client_id : null)
   const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
 
@@ -76,8 +79,8 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
           </p>
           {realCount != null && realCount !== current && (
             <p className="mt-1 text-xs text-purple-300">
-              Contagem real nas respostas de formulário: {realCount} (Ativos Digitais → Integrações → Ver respostas,
-              ou o cliente na aba Leads)
+              {leadCountLabel(goal.metric_type)}: {realCount} (Ativos Digitais → Integrações → Ver respostas, ou o
+              cliente na aba Leads)
             </p>
           )}
         </div>

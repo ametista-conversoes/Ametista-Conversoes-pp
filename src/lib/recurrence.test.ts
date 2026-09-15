@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  daysUntilRecurrenceDue,
   effectiveActivityCompleted,
   effectiveTaskStatus,
   isCompletionStale,
@@ -112,5 +113,30 @@ describe('isCompletionStale', () => {
   it('defaults the grace period to 1 day', () => {
     expect(isCompletionStale('2026-09-29T00:00:00Z', undefined, now)).toBe(true)
     expect(isCompletionStale('2026-09-30T00:00:00Z', undefined, now)).toBe(false)
+  })
+})
+
+describe('daysUntilRecurrenceDue', () => {
+  const now = new Date('2026-09-30T12:00:00Z')
+
+  it('is null without a recurrence or a completion date', () => {
+    expect(daysUntilRecurrenceDue(null, '2026-09-25T12:00:00Z', 'dominacao', now)).toBeNull()
+    expect(daysUntilRecurrenceDue('7', null, 'dominacao', now)).toBeNull()
+    expect(daysUntilRecurrenceDue('unica', '2026-09-25T12:00:00Z', 'dominacao', now)).toBeNull()
+  })
+
+  it('is null when a plan-dependent cadence has no plan to resolve against', () => {
+    expect(daysUntilRecurrenceDue('cadencia_otimizacao', '2026-09-25T12:00:00Z', null, now)).toBeNull()
+  })
+
+  it('counts down the days remaining until the next cycle', () => {
+    // completed 2 days ago, recurrence is 7 days -> 5 days left
+    expect(daysUntilRecurrenceDue('7', '2026-09-28T12:00:00Z', null, now)).toBe(5)
+  })
+
+  it('resolves plan cadence the same way isRecurrenceDueAgain does', () => {
+    const completedAt = '2026-09-25T12:00:00Z'
+    expect(daysUntilRecurrenceDue('cadencia_otimizacao', completedAt, 'dominacao', now)).toBe(2)
+    expect(daysUntilRecurrenceDue('cadencia_otimizacao', completedAt, 'validacao', now)).toBe(25)
   })
 })

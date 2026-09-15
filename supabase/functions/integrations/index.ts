@@ -989,13 +989,27 @@ async function refreshMetaAccessToken(currentToken: string): Promise<RefreshResu
 
   const longTokenRes = await fetch(longTokenUrl.toString())
   const longTokenBody = await longTokenRes.json()
-  if (!longTokenRes.ok) return null
+  if (!longTokenRes.ok) {
+    await logServerError('integrations', 'refreshMetaAccessToken: Meta recusou renovar o token', longTokenBody)
+    return null
+  }
 
   return { accessToken: longTokenBody.access_token as string, expiresIn: (longTokenBody.expires_in as number | undefined) ?? 5_184_000 }
 }
 
 /** Reaproveitada por getValidAccessToken (conexão por cliente, legada)
- * e getValidAgencyAccessToken (Fase 28). */
+ * e getValidAgencyAccessToken (Fase 28). Antes falhava em silêncio (só
+ * `return null`, sem log nenhum) — quem via "Não foi possível obter um
+ * token de acesso válido" no app não tinha como saber SE o problema era
+ * um `invalid_grant` (refresh_token revogado/vencido — precisa
+ * reconectar) ou outra coisa. Motivo mais comum de `invalid_grant`
+ * aqui: enquanto o app de OAuth do Google Cloud estiver em modo "Testing"
+ * (não publicado/verificado — ver item 31 do TESTES.md), o Google expira
+ * QUALQUER refresh_token sozinho depois de 7 dias, então toda conexão
+ * — mesmo uma que sincronizava perfeitamente antes — para de funcionar
+ * sozinha depois de uma semana até a verificação sair; a única forma de
+ * voltar a funcionar antes disso é desconectar e conectar de novo (gera
+ * um refresh_token novo, com outros 7 dias de validade). */
 async function refreshGoogleAccessToken(refreshToken: string): Promise<RefreshResult> {
   const refreshRes = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
@@ -1008,7 +1022,10 @@ async function refreshGoogleAccessToken(refreshToken: string): Promise<RefreshRe
     }),
   })
   const refreshBody = await refreshRes.json()
-  if (!refreshRes.ok) return null
+  if (!refreshRes.ok) {
+    await logServerError('integrations', 'refreshGoogleAccessToken: Google recusou renovar o token', refreshBody)
+    return null
+  }
 
   return { accessToken: refreshBody.access_token as string, expiresIn: (refreshBody.expires_in as number | undefined) ?? 3600 }
 }
@@ -1057,7 +1074,14 @@ async function getValidAccessToken(supabase: SupabaseClient, connectionId: strin
   if (!refreshToken) return null
 
   const refreshed = await refreshGoogleAccessToken(refreshToken as string)
-  if (!refreshed) return null
+  if (!refreshed) {
+    // Antes: ficava "Conectada" pra sempre mesmo com o refresh_token
+    // morto — sync falhava em loop, sem nenhum sinal visual de que
+    // precisava reconectar. Meta já fazia isso (ver o bloco acima);
+    // Google tinha ficado pra trás.
+    await supabase.from('digital_asset_connections').update({ status: 'error' }).eq('id', connectionId)
+    return null
+  }
 
   const { data: newAccessSecretId } = await supabase.rpc('store_oauth_secret', { secret: refreshed.accessToken })
   await supabase
@@ -1127,7 +1151,10 @@ async function getValidAgencyAccessToken(supabase: SupabaseClient, provider: 'go
   if (!refreshToken) return null
 
   const refreshed = await refreshGoogleAccessToken(refreshToken as string)
-  if (!refreshed) return null
+  if (!refreshed) {
+    await supabase.from('agency_provider_connections').update({ status: 'error' }).eq('id', agencyConnection.id)
+    return null
+  }
 
   const { data: newAccessSecretId } = await supabase.rpc('store_oauth_secret', { secret: refreshed.accessToken })
   await supabase

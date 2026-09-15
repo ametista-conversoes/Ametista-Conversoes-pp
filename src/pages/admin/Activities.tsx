@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Archive, ChevronDown, ChevronUp, ListChecks, Repeat, Trash2 } from 'lucide-react'
+import { Archive, ChevronDown, ChevronUp, ListChecks, Repeat, RotateCw, Trash2 } from 'lucide-react'
 import { NewActivityChecklistItemDialog } from '@/components/onboarding/NewActivityChecklistItemDialog'
 import { BulkDeleteToggle } from '@/components/shared/BulkDeleteToggle'
 import { ArchivedTasksDialog } from '@/components/tasks/ArchivedTasksDialog'
+import { RecurringTasksDialog, type RecurringTaskItem } from '@/components/tasks/RecurringTasksDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +21,15 @@ import {
   useToggleActivityChecklistItem,
 } from '@/hooks/useManagerPortalData'
 import { useMarkNavSeen } from '@/hooks/useNavSeen'
-import { effectiveActivityCompleted, isCompletionStale, recurrenceShortLabels, type RecurrenceInterval } from '@/lib/recurrence'
+import {
+  daysUntilRecurrenceDue,
+  effectiveActivityCompleted,
+  isCompletionStale,
+  recurrenceLabels,
+  recurrenceShortLabels,
+  recurrenceDueAt,
+  type RecurrenceInterval,
+} from '@/lib/recurrence'
 import { cn } from '@/lib/utils'
 
 const ALL_CLIENTS = 'all'
@@ -47,11 +56,11 @@ export default function Activities() {
   const [clientFilter, setClientFilter] = useState(ALL_CLIENTS)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  // Fase 36.1 — concluídas (recorrentes ou não) só ficam junto dos
-  // pendentes por 1 dia (`isCompletionStale`); depois disso somem da
-  // lista principal e só voltam se o gestor abrir esse toggle por
-  // cliente. Item recorrente sai do colapso sozinho quando a recorrência
-  // vence de novo (nada aqui precisa de "restaurar").
+  // Fase 36.1 — item SEM recorrência concluído só fica junto dos
+  // pendentes por 1 dia (`isCompletionStale`); depois disso some da
+  // lista principal e só volta se o gestor abrir esse toggle por
+  // cliente. Item COM recorrência não usa isso (ver Fase 36.2, diálogo
+  // "Recorrentes" mais abaixo) — sai da lista assim que concluído.
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
   function toggleExpandedClient(clientId: string) {
@@ -85,6 +94,41 @@ export default function Activities() {
     await deleteItems.mutateAsync(Array.from(selectedIds))
     exitSelectMode()
   }
+
+  async function handleReopenNow(itemId: string) {
+    await toggleItem.mutateAsync({ itemId, completed: false })
+  }
+
+  const clientsById = new Map((clients ?? []).map((client) => [client.id, client]))
+
+  // Fase 36.2 — item recorrente concluído nunca fica na lista principal
+  // (nem 1 dia): sai direto pra cá assim que marcado, com a contagem
+  // regressiva até vencer de novo — em vez do "Mostrar concluídas"
+  // genérico (esse continua só pra item SEM recorrência, ver `isStale`
+  // mais abaixo). Junta de TODOS os clientes, sem respeitar o filtro da
+  // página (mesmo espírito de "Arquivadas").
+  const recurringDormantTasks: RecurringTaskItem[] = (items ?? [])
+    .filter((item): item is ActivityChecklistItemRecord & { recurrence_interval: NonNullable<ActivityChecklistItemRecord['recurrence_interval']> } =>
+      !!item.recurrence_interval,
+    )
+    .flatMap((item) => {
+      const client = clientsById.get(item.client_id)
+      const plan = client?.plan ?? null
+      if (!effectiveActivityCompleted(item.completed, item.recurrence_interval, item.completed_at, plan)) return []
+      const dueAt = recurrenceDueAt(item.recurrence_interval, item.completed_at, plan)
+      const daysUntilDue = daysUntilRecurrenceDue(item.recurrence_interval, item.completed_at, plan)
+      if (!dueAt || daysUntilDue == null) return []
+      return [
+        {
+          id: item.id,
+          title: item.title,
+          clientName: client?.name ?? null,
+          recurrenceLabel: recurrenceLabels[item.recurrence_interval],
+          daysUntilDue,
+          dueAt: dueAt.toISOString(),
+        },
+      ]
+    })
 
   const visibleClients = (clients ?? []).filter(
     (client) => clientFilter === ALL_CLIENTS || client.id === clientFilter,
@@ -127,6 +171,16 @@ export default function Activities() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <RecurringTasksDialog
+            tasks={recurringDormantTasks}
+            onReopenNow={handleReopenNow}
+            trigger={
+              <Button type="button" variant="outline" size="sm">
+                <RotateCw className="h-4 w-4" />
+                Recorrentes{recurringDormantTasks.length > 0 ? ` (${recurringDormantTasks.length})` : ''}
+              </Button>
+            }
+          />
           <ArchivedTasksDialog
             tasks={(archivedItems ?? []).map((item) => ({ id: item.id, title: item.title, clientName: item.client?.name ?? null }))}
             archivedAtById={Object.fromEntries((archivedItems ?? []).map((item) => [item.id, item.archived_at]))}
@@ -175,18 +229,29 @@ export default function Activities() {
             ).length
             const percent = total > 0 ? Math.round((done / total) * 100) : 0
 
-            // Fase 36.1 — concluída (recorrente ou não) há mais de 1 dia
-            // some da lista principal, sem apagar nada; recorrente volta
-            // sozinha quando a recorrência vencer de novo, porque
-            // `isStale` recalcula tudo a cada render, não é um estado
-            // salvo em lugar nenhum. Modo de seleção sempre mostra tudo,
+            // Fase 36.1 — item SEM recorrência concluído há mais de 1 dia
+            // some da lista principal (sem apagar nada) até o gestor
+            // abrir esse toggle. Fase 36.2 — item COM recorrência nunca
+            // passa por aqui: sai da lista assim que concluído, direto
+            // pro diálogo global "Recorrentes" (mais acima), com a
+            // contagem regressiva até vencer — não faz sentido ele
+            // "expandir" aqui já que não é por cliente, é uma visão
+            // única de todo mundo. Modo de seleção sempre mostra tudo,
             // mesmo padrão do filtro de plataforma acima.
+            const isRecurringDormant = (item: ActivityChecklistItemRecord) =>
+              !!item.recurrence_interval &&
+              effectiveActivityCompleted(item.completed, item.recurrence_interval, item.completed_at, client.plan)
             const isStale = (item: ActivityChecklistItemRecord) =>
+              !item.recurrence_interval &&
               effectiveActivityCompleted(item.completed, item.recurrence_interval, item.completed_at, client.plan) &&
               isCompletionStale(item.completed_at)
             const staleCount = clientItems.filter(isStale).length
             const isExpanded = expandedClients.has(client.id)
-            const visibleClientItems = selectMode || isExpanded ? clientItems : clientItems.filter((item) => !isStale(item))
+            const visibleClientItems = clientItems.filter((item) => {
+              if (selectMode) return true
+              if (isRecurringDormant(item)) return false
+              return isExpanded || !isStale(item)
+            })
 
             const itemsByGroup = new Map<string, ActivityChecklistItemRecord[]>()
             for (const item of visibleClientItems) {

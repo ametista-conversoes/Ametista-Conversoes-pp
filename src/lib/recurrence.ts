@@ -71,6 +71,24 @@ export function resolveRecurrenceDays(recurrence: RecurrenceInterval, plan: stri
   }
 }
 
+/** Data em que um ciclo concluído vence de novo — `null` quando não dá
+ * pra calcular (sem recorrência, nunca concluído, ou cadência de plano
+ * sem plano definido ainda). Base de `isRecurrenceDueAgain` e
+ * `daysUntilRecurrenceDue`, pra não duplicar a mesma conta em 2 lugares. */
+export function recurrenceDueAt(
+  recurrence: RecurrenceInterval | string | null,
+  completedAt: string | null,
+  plan: string | null,
+): Date | null {
+  if (!recurrence || !completedAt) return null
+  if (!RECURRENCE_OPTIONS.includes(recurrence as RecurrenceInterval)) return null
+  const days = resolveRecurrenceDays(recurrence as RecurrenceInterval, plan)
+  if (days == null) return null
+  const dueAt = new Date(completedAt)
+  dueAt.setDate(dueAt.getDate() + days)
+  return dueAt
+}
+
 /** Verdadeiro quando um item concluído já passou do intervalo e deve
  * voltar a aparecer como pendente. Item sem recorrência, ou nunca
  * concluído, nunca "vence" — comportamento idêntico ao de antes da
@@ -81,13 +99,25 @@ export function isRecurrenceDueAgain(
   plan: string | null,
   now: Date = new Date(),
 ): boolean {
-  if (!recurrence || !completedAt) return false
-  if (!RECURRENCE_OPTIONS.includes(recurrence as RecurrenceInterval)) return false
-  const days = resolveRecurrenceDays(recurrence as RecurrenceInterval, plan)
-  if (days == null) return false
-  const dueAt = new Date(completedAt)
-  dueAt.setDate(dueAt.getDate() + days)
+  const dueAt = recurrenceDueAt(recurrence, completedAt, plan)
+  if (!dueAt) return false
   return now >= dueAt
+}
+
+/** Fase 36.2 — quantos dias faltam até um ciclo concluído vencer de
+ * novo (arredondado pra cima; 0 = vence hoje; negativo não deveria
+ * acontecer em uso normal, já que o item reabre sozinho assim que
+ * vence — serve só de proteção). `null` nos mesmos casos de
+ * `recurrenceDueAt`. */
+export function daysUntilRecurrenceDue(
+  recurrence: RecurrenceInterval | string | null,
+  completedAt: string | null,
+  plan: string | null,
+  now: Date = new Date(),
+): number | null {
+  const dueAt = recurrenceDueAt(recurrence, completedAt, plan)
+  if (!dueAt) return null
+  return Math.ceil((dueAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
 }
 
 /** Estado "efetivo" de conclusão de um item do checklist de Atividades —

@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
 import { useClientLeadStatusCounts, useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
-import { leadCountForMetric } from '@/lib/lead-metrics'
+import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
 import { smartGoalStatusLabels } from '@/lib/status-styles'
 
 const updateProgressSchema = z.object({
@@ -36,7 +36,7 @@ interface UpdateGoalProgressDialogProps {
 export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps) {
   const [open, setOpen] = useState(false)
   const updateProgress = useUpdateSmartGoalProgress()
-  const isLeadMetric = goal.metric_type === 'leads_qualificados' || goal.metric_type === 'vendas'
+  const isLeadMetric = isLeadCountMetric(goal.metric_type)
   const leadCounts = useClientLeadStatusCounts(isLeadMetric && open ? goal.client_id : null)
   const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
 
@@ -99,7 +99,7 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
                       className="text-xs text-purple-300 underline decoration-dotted hover:text-purple-400"
                       onClick={() => form.setValue('currentValue', String(realCount), { shouldDirty: true })}
                     >
-                      Usar contagem real das respostas de formulário: {realCount}
+                      Usar {leadCountLabel(goal.metric_type).toLowerCase()}: {realCount}
                     </button>
                   )}
                   <FormMessage />
