@@ -1,4 +1,4 @@
-import { ListChecks, Pencil, Star, StarOff, Workflow as WorkflowIcon } from 'lucide-react'
+import { ListChecks, Pencil, Repeat, Star, StarOff, Workflow as WorkflowIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import {
   useSetDefaultActivityTemplate,
   useUnsetDefaultActivityTemplate,
 } from '@/hooks/useManagerPortalData'
+import { recurrenceShortLabels } from '@/lib/recurrence'
 import { planLabels } from '@/lib/status-styles'
 import { ActivityTemplateFormDialog } from './ActivityTemplateFormDialog'
 
@@ -146,6 +147,12 @@ export function ActivityTemplateCard({ template, deleteMode, canEdit, linkedWork
                 {platformTag && (
                   <Badge className="shrink-0 border-[#1A2540] bg-secondary/50 text-[10px] text-muted-foreground">
                     {platformTag}
+                  </Badge>
+                )}
+                {item.recurrence && (
+                  <Badge className="shrink-0 gap-1 border-purple-600/20 bg-purple-600/10 text-[10px] text-purple-300">
+                    <Repeat className="h-2.5 w-2.5" />
+                    {recurrenceShortLabels[item.recurrence]}
                   </Badge>
                 )}
               </li>

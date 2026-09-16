@@ -46,7 +46,9 @@ export function ManagerClientTaskRow({ task, showClientName, deleteMode }: Manag
       )}
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
+        <p className={cn('truncate text-sm font-medium', status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground')}>
+          {task.title}
+        </p>
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {showClientName && (task.client?.name ?? 'Sem cliente')}
           {task.category ? ` · ${task.category}` : ''}

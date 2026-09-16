@@ -252,7 +252,23 @@
 - [ ] Repita o mesmo teste de "força 31 dias" num item COM recorrência → confirma que esse NUNCA aparece na tela "Arquivadas" (só o item 34 se aplica a ele, nunca o arquivamento de verdade).
 
 ## 34. Fase 36.2 — Aba "Recorrentes" com contagem regressiva (Atividades do Gestor + Tarefas do Cliente)
-- [ ] **Como achar o id de um item de Atividades pra testar** (dúvida do usuário): no SQL Editor, `select id, title, completed, completed_at, recurrence_interval from public.activity_checklist_items where client_id = (select id from public.clients where name = 'NOME DO CLIENTE') order by title;` — troque `NOME DO CLIENTE`. Pra `client_tasks` é a mesma ideia, só trocando o nome da tabela.
+- [ ] **Como achar o id de um item pra testar** (dúvida do usuário — a query anterior falhava com "0 rows" quando o nome do cliente não batia exato): no SQL Editor, use as queries abaixo, que não dependem de acertar o nome do cliente — trazem os itens concluídos mais recentes de qualquer cliente:
+  ```sql
+  -- Atividades do Gestor (activity_checklist_items)
+  select id, title, client_id, completed, completed_at, recurrence_interval
+  from public.activity_checklist_items
+  where completed = true
+  order by completed_at desc
+  limit 20;
+
+  -- Tarefas do Cliente (client_tasks)
+  select id, title, client_id, status, completed_at, recurrence_interval
+  from public.client_tasks
+  where status = 'done'
+  order by completed_at desc
+  limit 20;
+  ```
+  Pegue o `id` da linha desejada (de preferência uma com `recurrence_interval` preenchido, pra testar o item 34) e use nos comandos de `update` abaixo. Pra achar por cliente específico, dá pra juntar com `join public.clients c on c.id = activity_checklist_items.client_id where c.name ilike '%pedaço do nome%'` em vez de `=` exato.
 - [ ] Marque um item/tarefa COM recorrência como concluído → confirma que ele some da lista principal IMEDIATAMENTE (nem precisa esperar 1 dia, diferente do item sem recorrência) e o botão "Recorrentes" no topo (`/activities` e `/client-tasks`) mostra a contagem entre parênteses subindo 1.
 - [ ] Abra o diálogo "Recorrentes" → confirma que o item aparece com nome do cliente, badge de recorrência e "Vence em N dias (DD/MM/AAAA)", ordenado do que vence mais cedo pro que vence mais tarde.
 - [ ] Force `completed_at` mais pra trás no SQL Editor (ex: `- interval '29 days'` num item de 30 dias) e recarregue → confirma que a contagem "Vence em N dias" atualizou pra refletir a nova data, sem precisar mexer em mais nada.
@@ -265,3 +281,9 @@
 - [ ] **Atenção**: `supabase functions deploy integrations` — sem o deploy, o log novo do refresh de token não funciona (o resto é só frontend).
 - [ ] Se uma conexão (Google Ads/Forms/Meta) que estava sincronizando bem começar a dar "Não foi possível obter um token de acesso válido" do nada: confirma em Configurações → Erros que agora aparece uma entrada nova com o motivo real do Google/Meta (antes falhava em silêncio, sem log nenhum); confirma também que o badge de status dessa conexão virou "Erro" (antes ficava "Conectada" pra sempre, mesmo morta). Causa mais provável enquanto o app não sai do modo "Testing" do Google: refresh_token expira sozinho depois de 7 dias — o fix é desconectar e conectar de novo.
 - [ ] Meta SMART com "Tipo de métrica" = "Leads" (a genérica, não "Leads Qualificados") pra um cliente com respostas de formulário → confirma que agora aparece a linha "Respostas de formulário recebidas (bruto, sem validação): N" (contando QUALQUER status, não só Qualificado/Venda) — diferente da linha "Contagem real..." que "Leads Qualificados"/"Vendas" mostram, de propósito, pra não confundir volume de preenchimento com lead validado.
+
+## 36. Fase 36.4 — Riscar tarefa concluída em "Tarefas do Cliente" (Portal Gestor) + badge de recorrência nos modelos de Workflow
+- [ ] Em "Tarefas do Cliente" (`/client-tasks`), marque uma tarefa como "Concluída" pelo badge de status → confirma que o título agora fica riscado (`line-through`) e acinzentado, igual já acontecia em Atividades do Gestor e no Portal Cliente — antes ficava com a cor normal, só o badge de status mudava.
+- [ ] Em Workflows → aba "Workflows de Atividades", edite um modelo e configure recorrência em pelo menos 1 item → confirma que o card do modelo (fora do modo de edição) mostra uma badge roxa "🔁 X dias"/"🔁 cadência de..." ao lado do título desse item, sem precisar abrir "Editar" pra saber.
+- [ ] Mesmo teste na aba "Workflows do Cliente" (`ClientWorkflowCard`) — configure recorrência num step do modelo → confirma a mesma badge aparece no card.
+- [ ] Confirma que Workflows Operacionais (Kanban, aba "Workflows") NÃO ganham essa badge — esse tipo de workflow nunca teve recorrência (só cria tarefas em `tasks`, que não tem esse campo), de propósito.
