@@ -951,7 +951,14 @@ async function discoverMetaBusinesses(accessToken: string): Promise<MetaBusiness
   const businessesRes = await fetch(businessesUrl.toString())
   const businessesBody = await businessesRes.json()
   if (!businessesRes.ok) {
-    console.error('[integrations] discoverMetaBusinesses: falhou:', businessesBody)
+    // Fase 37.2 (achado ao vivo): antes só logava no console (inacessível
+    // pro usuário) e devolvia [] — indistinguível de "a conta realmente
+    // não tem Business Manager nenhum". Motivo mais comum: token ainda
+    // sem o escopo business_management (Fase 37.1) — reconectar depois
+    // do deploy resolve; outra causa comum é a conta do Meta não ter
+    // papel (Admin/Developer/Tester) no App do Meta Developers enquanto
+    // ele não passa pela revisão do Meta (item equivalente ao 31).
+    await logServerError('integrations', 'discoverMetaBusinesses: GET /me/businesses falhou', businessesBody)
     return []
   }
 
@@ -972,7 +979,10 @@ async function discoverMetaClientAdAccounts(accessToken: string, businessId: str
   const accountsRes = await fetch(accountsUrl.toString())
   const accountsBody = await accountsRes.json()
   if (!accountsRes.ok) {
-    console.error('[integrations] discoverMetaClientAdAccounts: falhou:', accountsBody)
+    // Fase 37.2 — mesmo motivo do log novo em discoverMetaBusinesses:
+    // antes só console.error (inacessível), indistinguível de "não tem
+    // conta de cliente vinculada mesmo".
+    await logServerError('integrations', 'discoverMetaClientAdAccounts: GET /{business_id}/client_ad_accounts falhou', accountsBody)
     return []
   }
 
