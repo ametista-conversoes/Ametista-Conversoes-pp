@@ -15,8 +15,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
-import { useClientLeadStatusCounts, useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
-import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
+import { useClientAdConversions, useClientLeadStatusCounts, useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
+import { adConversionsLabel, isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
 import { smartGoalStatusLabels } from '@/lib/status-styles'
 
 const updateProgressSchema = z.object({
@@ -39,6 +39,9 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
   const isLeadMetric = isLeadCountMetric(goal.metric_type)
   const leadCounts = useClientLeadStatusCounts(isLeadMetric && open ? goal.client_id : null)
   const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
+
+  const adConversionsMetric = adConversionsLabel(goal.metric_type)
+  const adConversions = useClientAdConversions(adConversionsMetric && open ? goal.client_id : null)
 
   const form = useForm<UpdateProgressValues>({
     resolver: zodResolver(updateProgressSchema),
@@ -100,6 +103,17 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
                       onClick={() => form.setValue('currentValue', String(realCount), { shouldDirty: true })}
                     >
                       Usar {leadCountLabel(goal.metric_type).toLowerCase()}: {realCount}
+                    </button>
+                  )}
+                  {adConversionsMetric && adConversions.data?.hasLinkedCampaigns && (
+                    <button
+                      type="button"
+                      className="block text-xs text-purple-300 underline decoration-dotted hover:text-purple-400"
+                      onClick={() =>
+                        form.setValue('currentValue', String(adConversions.data!.conversions), { shouldDirty: true })
+                      }
+                    >
+                      Usar {adConversionsMetric.toLowerCase()}: {adConversions.data.conversions}
                     </button>
                   )}
                   <FormMessage />

@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { UserPlus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { ManualLeadsDialog } from '@/components/leads/ManualLeadsDialog'
 import { UnlinkedClientNotice } from '@/components/shared/UnlinkedClientNotice'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLeadQuestions, useLeads, useSetLeadStatus, type LeadStatus } from '@/hooks/useClientPortalData'
@@ -46,12 +49,25 @@ export default function Leads() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm text-muted-foreground">Portal Cliente</p>
-        <h1 className="text-2xl font-semibold text-foreground">Leads</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Respostas dos formulários conectados — marque o status de cada uma conforme a negociação avança.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">Portal Cliente</p>
+          <h1 className="text-2xl font-semibold text-foreground">Leads</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Respostas dos formulários conectados — marque o status de cada uma conforme a negociação avança.
+          </p>
+        </div>
+        {clientId && (
+          <ManualLeadsDialog
+            clientId={clientId}
+            trigger={
+              <Button type="button" variant="outline" size="sm">
+                <UserPlus className="h-4 w-4" />
+                Registrar lead manual
+              </Button>
+            }
+          />
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">

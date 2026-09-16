@@ -1174,6 +1174,10 @@ type SyncableConnection = {
   external_account_id: string | null
   login_customer_id: string | null
   agency_provider_connection_id: string | null
+  /** Fase 37 — só preenchido pro Google Forms: 'vendas'/'perdido' faz a
+   * resposta sincronizada nascer com esse status direto, em vez de
+   * 'novo' (ver `syncFormsConnection`). */
+  form_purpose: string | null
   digital_assets: { client_id: string } | { client_id: string }[]
 }
 
@@ -1757,6 +1761,24 @@ async function syncFormsConnection(supabase: SupabaseClient, connection: Syncabl
     pageToken = responsesBody.nextPageToken as string | undefined
   } while (pageToken)
 
+  // Fase 37 — formulário com propósito definido ("vendas"/"perdido")
+  // classifica sozinho toda resposta ainda "novo" (nunca mexida na mão)
+  // pro status correspondente — 1 update em lote no fim, cobrindo tanto
+  // as respostas recém-sincronizadas quanto o histórico antigo que ainda
+  // estava pendente. Nunca sobrescreve uma resposta já classificada
+  // manualmente (qualificado/venda/perdido), só a que segue "novo".
+  if (connection.form_purpose === 'vendas' || connection.form_purpose === 'perdido') {
+    const targetStatus = connection.form_purpose === 'vendas' ? 'venda' : 'perdido'
+    const { error: purposeStatusError } = await supabase
+      .from('form_responses')
+      .update({ status: targetStatus })
+      .eq('connection_id', connection.id)
+      .eq('status', 'novo')
+    if (purposeStatusError) {
+      return dbSyncError('syncFormsConnection: aplicar status automático por propósito do formulário', purposeStatusError)
+    }
+  }
+
   await supabase.from('digital_asset_connections').update({ last_synced_at: new Date().toISOString() }).eq('id', connection.id)
 
   return { ok: true, syncedQuestions: questionRows.length, syncedResponses }
@@ -1778,7 +1800,7 @@ async function handleSync(req: Request) {
 
   const { data: connection, error: connectionError } = await supabase
     .from('digital_asset_connections')
-    .select('id, provider, external_account_id, login_customer_id, agency_provider_connection_id, digital_assets(client_id)')
+    .select('id, provider, external_account_id, login_customer_id, agency_provider_connection_id, form_purpose, digital_assets(client_id)')
     .eq('id', body.connection_id)
     .maybeSingle()
   if (connectionError) return dbErrorResponse('handleSync: buscar conexão', connectionError)
@@ -2345,7 +2367,7 @@ async function handleSyncAll(req: Request) {
 
   const { data: connections, error: connectionsError } = await supabase
     .from('digital_asset_connections')
-    .select('id, provider, external_account_id, login_customer_id, agency_provider_connection_id, digital_assets(client_id)')
+    .select('id, provider, external_account_id, login_customer_id, agency_provider_connection_id, form_purpose, digital_assets(client_id)')
     .eq('status', 'connected')
     .in('provider', ['google_ads', 'meta_ads', 'google_forms'])
   if (connectionsError) return dbErrorResponse('handleSyncAll: buscar conexões', connectionsError)

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ListChecks, Plug, Plus, RefreshCw, Search } from 'lucide-react'
+import { ListChecks, Plug, Plus, RefreshCw, Search, UserPlus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AssetCard } from '@/components/assets/AssetCard'
 import { AssetFormDialog } from '@/components/assets/AssetFormDialog'
 import { FormResponsesDialog } from '@/components/assets/FormResponsesDialog'
+import { ManualLeadsDialog } from '@/components/leads/ManualLeadsDialog'
 import { DeleteModeToggle } from '@/components/shared/DeleteModeToggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -260,6 +261,17 @@ export default function Assets() {
                             <Button type="button" variant="outline" size="sm" className="h-7 text-xs">
                               <ListChecks className="h-3.5 w-3.5" />
                               Ver respostas
+                            </Button>
+                          }
+                        />
+                      )}
+                      {connection.status === 'connected' && connection.provider === 'google_forms' && (
+                        <ManualLeadsDialog
+                          clientId={asset!.client_id}
+                          trigger={
+                            <Button type="button" variant="outline" size="sm" className="h-7 text-xs">
+                              <UserPlus className="h-3.5 w-3.5" />
+                              Leads manuais
                             </Button>
                           }
                         />

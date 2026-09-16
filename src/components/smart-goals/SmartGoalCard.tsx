@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
-import { useClientLeadStatusCounts, useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
+import { useClientAdConversions, useClientLeadStatusCounts, useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
 import { formatDate, getGoalDeadlineStatus } from '@/lib/format'
-import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
+import { adConversionsLabel, isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
 import {
   goalDeadlineStatusLabels,
   goalDeadlineStatusStyles,
@@ -39,6 +39,14 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
   const isLeadMetric = isLeadCountMetric(goal.metric_type)
   const leadCounts = useClientLeadStatusCounts(isLeadMetric ? goal.client_id : null)
   const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
+
+  // Fase 37, Bloco 2 — "Leads" (bruto) ganha uma 2ª fonte de contagem
+  // real: conversão que o próprio Google/Meta Ads já rastreia (pixel/tag
+  // das campanhas vinculadas), ao lado da contagem de respostas de
+  // formulário — são números diferentes por natureza, mostrados
+  // separados, nunca somados um no outro.
+  const adConversionsMetric = adConversionsLabel(goal.metric_type)
+  const adConversions = useClientAdConversions(adConversionsMetric ? goal.client_id : null)
 
   return (
     <Card className="flex flex-col rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
@@ -81,6 +89,11 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
             <p className="mt-1 text-xs text-purple-300">
               {leadCountLabel(goal.metric_type)}: {realCount} (Ativos Digitais → Integrações → Ver respostas, ou o
               cliente na aba Leads)
+            </p>
+          )}
+          {adConversionsMetric && adConversions.data?.hasLinkedCampaigns && (
+            <p className="mt-1 text-xs text-purple-300">
+              {adConversionsMetric}: {adConversions.data.conversions}
             </p>
           )}
         </div>

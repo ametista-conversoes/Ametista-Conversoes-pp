@@ -2189,6 +2189,10 @@ export interface DigitalAssetConnectionRecord {
    * por quem cadastrou. */
   external_account_name: string | null
   last_synced_at: string | null
+  /** Fase 37 — só faz sentido pro Google Forms: quando definido, toda
+   * resposta nova sincronizada (ainda "novo") já nasce classificada
+   * como Venda/Perdido sozinha, sem precisar de clique manual. */
+  form_purpose: 'vendas' | 'perdido' | null
 }
 
 /** Conexões de integração (Fase 6.1/6.2) — quem escreve aqui é sempre
@@ -2200,9 +2204,30 @@ export function useDigitalAssetConnections() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('digital_asset_connections')
-        .select('id, digital_asset_id, provider, status, project_id, external_account_id, external_account_name, last_synced_at')
+        .select(
+          'id, digital_asset_id, provider, status, project_id, external_account_id, external_account_name, last_synced_at, form_purpose',
+        )
       if (error) throw error
       return data as DigitalAssetConnectionRecord[]
+    },
+  })
+}
+
+/** Fase 37 — propósito do formulário conectado (Venda/Perdido/nenhum),
+ * via RPC (mesma razão de sempre: a RLS de `digital_asset_connections`
+ * só libera SELECT pro app). */
+export function useSetFormPurpose() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ connectionId, purpose }: { connectionId: string; purpose: 'vendas' | 'perdido' | null }) => {
+      const { error } = await supabase.rpc('set_form_purpose', { p_connection_id: connectionId, p_purpose: purpose })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['digital-asset-connections'] })
+    },
+    onError: () => {
+      toast.error('Não foi possível salvar o propósito do formulário.')
     },
   })
 }
@@ -2337,22 +2362,210 @@ export function useSetFormResponseStatus() {
 }
 
 /** Contagem de leads por status de um cliente, somando TODOS os
- * formulários conectados dele — alimenta a sugestão automática nas
- * Metas SMART de tipo "Leads Qualificados"/"Vendas" (Fase 35, Parte 2).
- * "Qualificados" conta qualificado + venda (uma venda também passou
- * pela qualificação); "Vendas" conta só venda. */
+ * formulários conectados dele + os leads manuais (Fase 37 — registrados
+ * pra cobrir quem qualifica por um canal que o app não rastreia, ex:
+ * respondeu no WhatsApp) — alimenta a sugestão automática nas Metas
+ * SMART de tipo "Leads"/"Leads Qualificados"/"Vendas" (Fase 35, Parte 2
+ * + Fase 37). "Qualificados" conta qualificado + venda (uma venda
+ * também passou pela qualificação); "Vendas" conta só venda. `total`
+ * (volume bruto) continua só de resposta de formulário de propósito —
+ * lead manual nunca preencheu formulário nenhum, não faz sentido somar
+ * aí. */
 export function useClientLeadStatusCounts(clientId: string | null) {
   return useQuery({
     queryKey: ['lead-status-counts', clientId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('form_responses').select('status').eq('client_id', clientId as string)
-      if (error) throw error
-      const rows = data as { status: LeadStatus }[]
-      const qualificados = rows.filter((r) => r.status === 'qualificado' || r.status === 'venda').length
-      const vendas = rows.filter((r) => r.status === 'venda').length
-      return { qualificados, vendas, total: rows.length }
+      const [formResult, manualResult] = await Promise.all([
+        supabase.from('form_responses').select('status').eq('client_id', clientId as string),
+        supabase.from('manual_leads').select('status').eq('client_id', clientId as string),
+      ])
+      if (formResult.error) throw formResult.error
+      if (manualResult.error) throw manualResult.error
+      const formRows = formResult.data as { status: LeadStatus }[]
+      const manualRows = manualResult.data as { status: LeadStatus }[]
+      const allClassified = [...formRows, ...manualRows]
+      const qualificados = allClassified.filter((r) => r.status === 'qualificado' || r.status === 'venda').length
+      const vendas = allClassified.filter((r) => r.status === 'venda').length
+      return { qualificados, vendas, total: formRows.length }
     },
     enabled: !!clientId,
+  })
+}
+
+export interface ClientAdConversions {
+  /** Soma de `conversions` (pixel/tag do próprio Google/Meta Ads) dos
+   * últimos 30 dias, de TODAS as campanhas vinculadas a QUALQUER
+   * projeto do cliente — número por natureza diferente da contagem de
+   * respostas de formulário (uma conversão rastreada pelo provedor não
+   * é necessariamente um preenchimento do Google Forms conectado). */
+  conversions: number
+  /** false quando o cliente não tem nenhuma campanha vinculada ainda —
+   * usado pra decidir se vale a pena mostrar a linha (0 por falta de
+   * vínculo é diferente de 0 conversões reais). */
+  hasLinkedCampaigns: boolean
+}
+
+/** Fase 37, Bloco 2 — "Leads" (bruto) ganha uma 2ª fonte de contagem
+ * real: em vez de só respostas de formulário, também soma a conversão
+ * que o próprio Google/Meta Ads já rastreia via pixel/tag nas campanhas
+ * vinculadas aos projetos do cliente (`campaign_performance_snapshots`,
+ * já sincronizado pra CPA/ROAS — só reaproveitado aqui). */
+export function useClientAdConversions(clientId: string | null) {
+  return useQuery({
+    queryKey: ['client-ad-conversions', clientId],
+    queryFn: async (): Promise<ClientAdConversions> => {
+      const { data: projects, error: projectsError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('client_id', clientId as string)
+      if (projectsError) throw projectsError
+      const projectIds = (projects ?? []).map((p) => p.id as string)
+      if (projectIds.length === 0) return { conversions: 0, hasLinkedCampaigns: false }
+
+      const { data: links, error: linksError } = await supabase
+        .from('project_campaign_links')
+        .select('connection_id, external_campaign_id')
+        .in('project_id', projectIds)
+      if (linksError) throw linksError
+      const linkRows = (links ?? []) as { connection_id: string; external_campaign_id: string }[]
+      if (linkRows.length === 0) return { conversions: 0, hasLinkedCampaigns: false }
+
+      const connectionIds = Array.from(new Set(linkRows.map((l) => l.connection_id)))
+      const validPairs = new Set(linkRows.map((l) => `${l.connection_id}:${l.external_campaign_id}`))
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+      const { data: snapshots, error: snapshotsError } = await supabase
+        .from('campaign_performance_snapshots')
+        .select('connection_id, external_campaign_id, conversions, snapshot_date')
+        .in('connection_id', connectionIds)
+        .gte('snapshot_date', since)
+      if (snapshotsError) throw snapshotsError
+
+      const conversions = ((snapshots ?? []) as { connection_id: string; external_campaign_id: string; conversions: number | null }[])
+        .filter((s) => validPairs.has(`${s.connection_id}:${s.external_campaign_id}`))
+        .reduce((sum, s) => sum + (s.conversions ?? 0), 0)
+
+      return { conversions, hasLinkedCampaigns: true }
+    },
+    enabled: !!clientId,
+  })
+}
+
+export interface ManualLeadRecord {
+  id: string
+  client_id: string
+  name: string
+  contact: string | null
+  note: string | null
+  status: LeadStatus
+  created_at: string
+}
+
+/** Fase 37, Bloco 3 — leads registrados na mão (ex: respondeu no
+ * WhatsApp, nunca preencheu formulário nenhum) — mesmo funil de status
+ * de `form_responses`, só que sem resposta de formulário por trás.
+ * Contam pra "Leads Qualificados"/"Vendas" (`useClientLeadStatusCounts`),
+ * nunca pro volume bruto "Leads" (que é só preenchimento de formulário). */
+export function useManualLeads(clientId: string | null) {
+  return useQuery({
+    queryKey: ['manual-leads', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('manual_leads')
+        .select('id, client_id, name, contact, note, status, created_at')
+        .eq('client_id', clientId as string)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data as ManualLeadRecord[]
+    },
+    enabled: !!clientId,
+  })
+}
+
+export interface CreateManualLeadInput {
+  client_id: string
+  name: string
+  contact: string | null
+  note: string | null
+}
+
+export function useCreateManualLead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: CreateManualLeadInput) => {
+      const { error } = await supabase.from('manual_leads').insert(input)
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['manual-leads', variables.client_id] })
+      queryClient.invalidateQueries({ queryKey: ['lead-status-counts', variables.client_id] })
+    },
+    onError: () => {
+      toast.error('Não foi possível registrar o lead.')
+    },
+  })
+}
+
+export function useSetManualLeadStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ leadId, status }: { leadId: string; status: LeadStatus }) => {
+      const { error } = await supabase.rpc('set_manual_lead_status', { p_lead_id: leadId, p_status: status })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manual-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['lead-status-counts'] })
+    },
+    onError: () => {
+      toast.error('Não foi possível atualizar o status do lead.')
+    },
+  })
+}
+
+export interface FormResponseSearchHit {
+  id: string
+  submitted_at: string | null
+  status: LeadStatus
+  matchedAnswer: string
+}
+
+/** Fase 37, Bloco 3 — busca dentro das respostas de formulário já
+ * sincronizadas de um cliente, procurando o termo em QUALQUER resposta
+ * de QUALQUER pergunta (nome, telefone, e-mail, o que a pessoa tiver
+ * digitado) — usada antes de registrar um lead manual, pra achar quem
+ * já tem uma linha de formulário e evitar duplicar o mesmo lead 2 vezes. */
+export function useSearchFormResponses(clientId: string | null, term: string) {
+  const trimmed = term.trim()
+  return useQuery({
+    queryKey: ['search-form-responses', clientId, trimmed],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('form_answers')
+        .select('answer_text, response:form_responses!inner(id, submitted_at, status, client_id)')
+        .eq('form_responses.client_id', clientId as string)
+        .ilike('answer_text', `%${trimmed}%`)
+        .limit(10)
+      if (error) throw error
+      const rows = data as unknown as {
+        answer_text: string | null
+        response: { id: string; submitted_at: string | null; status: LeadStatus }
+      }[]
+      const seen = new Set<string>()
+      const hits: FormResponseSearchHit[] = []
+      for (const row of rows) {
+        if (seen.has(row.response.id)) continue
+        seen.add(row.response.id)
+        hits.push({
+          id: row.response.id,
+          submitted_at: row.response.submitted_at,
+          status: row.response.status,
+          matchedAnswer: row.answer_text ?? '',
+        })
+      }
+      return hits
+    },
+    enabled: !!clientId && trimmed.length >= 2,
   })
 }
 

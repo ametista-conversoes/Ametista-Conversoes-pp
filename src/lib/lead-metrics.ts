@@ -44,3 +44,13 @@ export function leadCountLabel(metricType: string | null): string {
   if (metricType === 'leads') return 'Respostas de formulário recebidas (bruto, sem validação)'
   return 'Contagem real nas respostas de formulário'
 }
+
+/** Fase 37, Bloco 2 — rótulo da 2ª fonte de contagem real pra "Leads"
+ * (bruto): conversão que o próprio Google/Meta Ads rastreia via
+ * pixel/tag nas campanhas vinculadas, número por natureza diferente de
+ * "respondeu meu Google Forms" — só faz sentido pro metric_type "leads",
+ * `null` pros outros (não têm essa 2ª fonte). */
+export function adConversionsLabel(metricType: string | null): string | null {
+  if (metricType !== 'leads') return null
+  return 'Conversões rastreadas pelo pixel/tag do Google/Meta Ads (últimos 30 dias)'
+}
