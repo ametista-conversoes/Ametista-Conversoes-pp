@@ -110,6 +110,12 @@ const META_GRAPH_API_VERSION = 'v19.0' // conferir se ainda é suportada quando 
 const META_AUTHORIZE_URL = `https://www.facebook.com/${META_GRAPH_API_VERSION}/dialog/oauth`
 const META_TOKEN_URL = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/oauth/access_token`
 const META_SCOPE = 'ads_read' // só leitura de métricas — nada de gerenciar campanha
+// Fase 37.1 (achado ao vivo): a conexão de AGÊNCIA (Business Manager,
+// Fase 28) chama /me/businesses e /{business_id}/client_ad_accounts —
+// esses 2 endpoints exigem "business_management" além de "ads_read"
+// (a conexão por cliente, sem Business Manager, não precisa desse
+// escopo a mais — só lê o /me/adaccounts do próprio usuário logado).
+const META_AGENCY_SCOPE = 'ads_read business_management'
 
 // API oficial do Google Forms (Fase 8.2) — precisa estar habilitada no
 // mesmo projeto do Google Cloud Console usado pro OAuth, além dos
@@ -486,7 +492,7 @@ async function handleAgencyConnect(req: Request, url: URL) {
     authorizationUrl.searchParams.set('client_id', Deno.env.get('META_APP_ID') ?? '')
     authorizationUrl.searchParams.set('redirect_uri', redirectUri)
     authorizationUrl.searchParams.set('response_type', 'code')
-    authorizationUrl.searchParams.set('scope', META_SCOPE)
+    authorizationUrl.searchParams.set('scope', META_AGENCY_SCOPE)
     authorizationUrl.searchParams.set('state', `agency:${connection.id}`)
   } else {
     authorizationUrl = new URL(GOOGLE_AUTHORIZE_URL)
