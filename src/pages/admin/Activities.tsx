@@ -335,7 +335,7 @@ export default function Activities() {
                                   {item.title}
                                 </p>
                                 {(item.category || item.recurrence_interval) && (
-                                  <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                                     {item.category}
                                     {item.recurrence_interval && (
                                       <Badge className="gap-1 border-purple-600/20 bg-purple-600/10 text-[10px] text-purple-300">
@@ -343,7 +343,7 @@ export default function Activities() {
                                         {recurrenceShortLabels[item.recurrence_interval as RecurrenceInterval]}
                                       </Badge>
                                     )}
-                                  </p>
+                                  </div>
                                 )}
                               </div>
                             </label>

@@ -49,7 +49,7 @@ export function ManagerClientTaskRow({ task, showClientName, deleteMode }: Manag
         <p className={cn('truncate text-sm font-medium', status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground')}>
           {task.title}
         </p>
-        <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {showClientName && (task.client?.name ?? 'Sem cliente')}
           {task.category ? ` · ${task.category}` : ''}
           {task.due_date ? ` · Prazo: ${formatDate(task.due_date)}` : ''}
@@ -59,7 +59,7 @@ export function ManagerClientTaskRow({ task, showClientName, deleteMode }: Manag
               {recurrenceShortLabels[task.recurrence_interval as RecurrenceInterval]}
             </Badge>
           )}
-        </p>
+        </div>
       </div>
 
       <Badge className="border-[#1A2540] bg-secondary/50 text-muted-foreground">

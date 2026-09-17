@@ -545,7 +545,7 @@ export default function ClientDetail() {
                       <p className={`truncate text-sm ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                         {item.title}
                       </p>
-                      <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                         {item.source_template_name ?? 'Avulsa'}
                         {item.category ? ` · ${item.category}` : ''}
                         {item.recurrence_interval && (
@@ -554,7 +554,7 @@ export default function ClientDetail() {
                             {recurrenceShortLabels[item.recurrence_interval as RecurrenceInterval]}
                           </Badge>
                         )}
-                      </p>
+                      </div>
                     </div>
                   </label>
                 )

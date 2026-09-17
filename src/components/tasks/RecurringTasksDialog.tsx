@@ -80,7 +80,7 @@ export function RecurringTasksDialog({ trigger, tasks, onReopenNow }: RecurringT
             <div key={task.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-secondary/50 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
-                <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   {task.clientName ?? 'Sem cliente'}
                   <Badge className="gap-1 border-purple-600/20 bg-purple-600/10 text-[10px] text-purple-300">
                     <Repeat className="h-2.5 w-2.5" />
@@ -89,7 +89,7 @@ export function RecurringTasksDialog({ trigger, tasks, onReopenNow }: RecurringT
                   <span className="text-muted-foreground/70">
                     {dueLabel(task.daysUntilDue)} ({formatDate(task.dueAt)})
                   </span>
-                </p>
+                </div>
               </div>
               <Button
                 type="button"
