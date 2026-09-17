@@ -1214,6 +1214,18 @@ async function resolveAccessToken(
 
 type SyncResult = { ok: true; syncedDays: number } | { ok: false; error: string }
 
+/** Normaliza o status cru do Meta (campanha OU ad set) pro mesmo
+ * vocabulário do Google Ads (ENABLED/PAUSED/REMOVED) — usado tanto em
+ * `syncConnection` (status de campanha) quanto em `handleListAdGroups`
+ * (Fase 37.4, status de ad set), pra `check_campaign_state_changes()` e
+ * a UI não precisarem conhecer 2 vocabulários diferentes. */
+function normalizeMetaStatus(rawStatus: string | undefined | null): string | null {
+  if (!rawStatus) return null
+  if (rawStatus === 'PAUSED' || rawStatus === 'CAMPAIGN_PAUSED' || rawStatus === 'ADSET_PAUSED') return 'PAUSED'
+  if (rawStatus === 'DELETED' || rawStatus === 'ARCHIVED') return 'REMOVED'
+  return 'ENABLED'
+}
+
 /** Núcleo da sincronização de UMA conexão (Google Ads ou Meta Ads) —
  * nunca lança erro, sempre devolve um resultado. Reaproveitado pela
  * rota /sync (um clique, autenticada por login) e por /sync-all
@@ -1431,9 +1443,8 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
         for (const c of (objectivesBody.data ?? []) as Array<{ id: string; name?: string; objective?: string; status?: string }>) {
           if (c.name) campaignNames.set(c.id, c.name)
           if (c.objective) campaignObjectives.set(c.id, c.objective)
-          if (c.status === 'PAUSED') campaignStatuses.set(c.id, 'PAUSED')
-          else if (c.status === 'DELETED' || c.status === 'ARCHIVED') campaignStatuses.set(c.id, 'REMOVED')
-          else if (c.status) campaignStatuses.set(c.id, 'ENABLED')
+          const normalizedStatus = normalizeMetaStatus(c.status)
+          if (normalizedStatus) campaignStatuses.set(c.id, normalizedStatus)
         }
       }
     } catch {
@@ -1946,8 +1957,8 @@ async function handleListAdGroups(req: Request, url: URL) {
     .maybeSingle()
   if (connectionError) return dbErrorResponse('handleListAdGroups: buscar conexão', connectionError)
   if (!connection) return jsonResponse({ error: 'Conexão não encontrada' }, 404)
-  if (connection.provider !== 'google_ads') {
-    return jsonResponse({ error: 'Grupos de anúncio só disponíveis pra Google Ads por enquanto' }, 400)
+  if (connection.provider !== 'google_ads' && connection.provider !== 'meta_ads') {
+    return jsonResponse({ error: 'Grupos de anúncio só disponíveis pra Google Ads e Meta Ads' }, 400)
   }
   if (!connection.external_account_id) {
     return jsonResponse({ error: 'Conexão incompleta (falta conta de anúncios)' }, 400)
@@ -1955,6 +1966,62 @@ async function handleListAdGroups(req: Request, url: URL) {
 
   const accessToken = await resolveAccessToken(supabase, connection)
   if (!accessToken) return jsonResponse({ error: 'Não foi possível obter um token de acesso válido' }, 502)
+
+  // Fase 37.4 — Meta Ads: "conjunto de anúncios" (ad set) é o
+  // equivalente do "grupo de anúncio" do Google (hierarquia
+  // Campanha > Conjunto de Anúncios > Anúncio, em vez de Campanha >
+  // Grupo de Anúncios > Anúncio). Sem Índice de Qualidade — esse
+  // conceito não existe no nível de ad set do Meta (só "Relevância" por
+  // ANÚNCIO individual, que exige permissão extra) — fica sempre null,
+  // mesmo tratamento que campanha fora de Pesquisa já recebe no Google.
+  if (connection.provider === 'meta_ads') {
+    type MetaAdSetAcc = { id: string; name: string; status: string; spend: number; clicks: number; impressions: number; conversions: number }
+    const byAdSet = new Map<string, MetaAdSetAcc>()
+
+    const adSetsUrl = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${campaignId}/adsets`)
+    adSetsUrl.searchParams.set('fields', 'id,name,status')
+    adSetsUrl.searchParams.set('access_token', accessToken)
+    const adSetsRes = await fetch(adSetsUrl.toString())
+    const adSetsBody = await adSetsRes.json()
+    if (!adSetsRes.ok) return platformErrorResponse('handleListAdGroups: adsets', 'Meta Ads', adSetsBody)
+
+    for (const row of (adSetsBody.data ?? []) as Array<{ id: string; name?: string; status?: string }>) {
+      byAdSet.set(row.id, {
+        id: row.id,
+        name: row.name ?? row.id,
+        status: normalizeMetaStatus(row.status) ?? '',
+        spend: 0,
+        clicks: 0,
+        impressions: 0,
+        conversions: 0,
+      })
+    }
+
+    const adSetInsightsUrl = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${campaignId}/insights`)
+    adSetInsightsUrl.searchParams.set('level', 'adset')
+    adSetInsightsUrl.searchParams.set('fields', 'adset_id,adset_name,spend,clicks,impressions,actions')
+    adSetInsightsUrl.searchParams.set('date_preset', 'last_30d')
+    adSetInsightsUrl.searchParams.set('access_token', accessToken)
+    const adSetInsightsRes = await fetch(adSetInsightsUrl.toString())
+    const adSetInsightsBody = await adSetInsightsRes.json()
+    if (!adSetInsightsRes.ok) return platformErrorResponse('handleListAdGroups: adset insights', 'Meta Ads', adSetInsightsBody)
+
+    for (const row of (adSetInsightsBody.data ?? []) as Array<Record<string, unknown>>) {
+      const id = row.adset_id as string | undefined
+      if (!id) continue
+      const actions = (row.actions ?? []) as Array<{ value?: string }>
+      const conversions = actions.reduce((sum, a) => sum + Number(a.value ?? 0), 0)
+      const acc = byAdSet.get(id) ?? { id, name: (row.adset_name as string | undefined) ?? id, status: '', spend: 0, clicks: 0, impressions: 0, conversions: 0 }
+      acc.spend += Number(row.spend ?? 0)
+      acc.clicks += Number(row.clicks ?? 0)
+      acc.impressions += Number(row.impressions ?? 0)
+      acc.conversions += conversions
+      byAdSet.set(id, acc)
+    }
+
+    const adGroups = Array.from(byAdSet.values()).map((a) => ({ ...a, avgQualityScore: null }))
+    return jsonResponse({ adGroups })
+  }
 
   const adGroupsQuery = `
     SELECT ad_group.id, ad_group.name, ad_group.status,

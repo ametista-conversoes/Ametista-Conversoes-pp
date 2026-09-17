@@ -77,15 +77,19 @@ function InsightRowList<T extends InsightRow>({
 }
 
 /** Bloco completo de UMA campanha vinculada — orçamento/impressão
- * perdida/pacing, ad groups e os resumos curados (dispositivo,
- * geográfico, top termos, top keywords, breakdown de conversão,
- * melhor horário, demográfico). Só Google Ads por enquanto; campanhas
- * do Meta Ads mostram um aviso em vez de tentar buscar. */
+ * perdida/pacing, ad groups (ou ad sets no Meta) e os resumos curados
+ * (dispositivo, geográfico, top termos, top keywords, breakdown de
+ * conversão, melhor horário, demográfico). Orçamento/impressão perdida
+ * e os resumos curados continuam só Google Ads (conceitos específicos
+ * de Pesquisa, sem equivalente direto no Meta) — grupos/conjuntos de
+ * anúncio (Fase 37.4) já funcionam nos dois. */
 function SingleCampaignInsights({ link, provider }: { link: ProjectCampaignLink; provider: string | null }) {
+  const isGoogle = provider === 'google_ads'
   const singleLink = [{ connectionId: link.connection_id, campaignId: link.external_campaign_id }]
   const campaignPerformance = useCampaignPerformance(singleLink)
   const adGroupsQuery = useAdGroups(link.connection_id, link.external_campaign_id)
-  const insightsQuery = useCampaignInsights(link.connection_id, link.external_campaign_id)
+  const insightsQuery = useCampaignInsights(link.connection_id, isGoogle ? link.external_campaign_id : null)
+  const adGroupNoun = isGoogle ? 'grupo de anúncio' : 'conjunto de anúncios'
 
   // Utilização de orçamento (Nível 2 do documento de dados do Google
   // Ads: "pacing", uso interno da agência) — o orçamento sincronizado é
@@ -93,61 +97,58 @@ function SingleCampaignInsights({ link, provider }: { link: ProjectCampaignLink;
   // com o gasto real do período mostra se a campanha está deixando
   // orçamento "na mesa" por falta de demanda/lance, sem precisar abrir
   // o Gerenciador de Anúncios. Não aparece pro cliente (esta tela é só
-  // Portal Gestor).
+  // Portal Gestor). Só Google Ads — o Meta não reporta impressão
+  // perdida, e orçamento diário nem sempre existe (orçamento por
+  // conjunto de anúncios, não por campanha).
   const budgetAmount = campaignPerformance.data?.budgetAmount ?? null
   const spend30d = campaignPerformance.data?.spend ?? null
   const budgetPacing = budgetAmount && budgetAmount > 0 && spend30d != null ? (spend30d / (budgetAmount * 30)) * 100 : null
-
-  if (provider !== 'google_ads') {
-    return (
-      <div className="rounded-lg bg-secondary/50 p-3">
-        <p className="text-sm font-medium text-foreground">{link.external_campaign_name ?? link.external_campaign_id}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Grupos de anúncio e resumos curados só disponíveis pra campanhas do Google Ads por enquanto
-          {provider ? ` (essa é ${connectionProviderLabels[provider] ?? provider})` : ''}.
-        </p>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-3 rounded-lg border border-[#1A2540] p-3">
       <p className="text-sm font-semibold text-foreground">{link.external_campaign_name ?? link.external_campaign_id}</p>
 
-      <div className="rounded-lg bg-secondary/50 p-3">
-        <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Orçamento</p>
-            <p className="text-foreground">{formatCurrency(budgetAmount)}</p>
+      {isGoogle ? (
+        <div className="rounded-lg bg-secondary/50 p-3">
+          <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Orçamento</p>
+              <p className="text-foreground">{formatCurrency(budgetAmount)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Parcela de impressão perdida (classificação)</p>
+              <p className="text-foreground">{formatPercent(campaignPerformance.data?.searchRankLostImpressionShare ?? null)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Parcela de impressão perdida (orçamento)</p>
+              <p className="text-foreground">{formatPercent(campaignPerformance.data?.searchBudgetLostImpressionShare ?? null)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Utilização de orçamento (30 dias)</p>
+              <p className="text-foreground">{formatPercent(budgetPacing)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Parcela de impressão perdida (classificação)</p>
-            <p className="text-foreground">{formatPercent(campaignPerformance.data?.searchRankLostImpressionShare ?? null)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Parcela de impressão perdida (orçamento)</p>
-            <p className="text-foreground">{formatPercent(campaignPerformance.data?.searchBudgetLostImpressionShare ?? null)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Utilização de orçamento (30 dias)</p>
-            <p className="text-foreground">{formatPercent(budgetPacing)}</p>
-          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground/70">
+            Impressão perdida só tem valor real em campanhas de Pesquisa — em Display/Vídeo/Performance Max aparece
+            "—". Utilização de orçamento é uso interno (o cliente não vê essa aba) — bem abaixo de 100% pode indicar
+            orçamento sobrando por falta de lance/demanda, não necessariamente algo bom.
+          </p>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground/70">
-          Impressão perdida só tem valor real em campanhas de Pesquisa — em Display/Vídeo/Performance Max aparece
-          "—". Utilização de orçamento é uso interno (o cliente não vê essa aba) — bem abaixo de 100% pode indicar
-          orçamento sobrando por falta de lance/demanda, não necessariamente algo bom.
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Orçamento e parcela de impressão perdida só existem pra campanhas do Google Ads (conceitos de Pesquisa,
+          sem equivalente direto no {connectionProviderLabels[provider ?? ''] ?? 'Meta Ads'}).
         </p>
-      </div>
+      )}
 
-      {adGroupsQuery.isLoading && <p className="text-sm text-muted-foreground">Buscando grupos de anúncio...</p>}
+      {adGroupsQuery.isLoading && <p className="text-sm text-muted-foreground">Buscando {adGroupNoun}s...</p>}
       {adGroupsQuery.isError && (
         <p className="text-sm text-destructive">
-          {adGroupsQuery.error instanceof Error ? adGroupsQuery.error.message : 'Não foi possível buscar os grupos de anúncio.'}
+          {adGroupsQuery.error instanceof Error ? adGroupsQuery.error.message : `Não foi possível buscar os ${adGroupNoun}s.`}
         </p>
       )}
       {adGroupsQuery.data && adGroupsQuery.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum grupo de anúncio encontrado nessa campanha.</p>
+        <p className="text-sm text-muted-foreground">Nenhum {adGroupNoun} encontrado nessa campanha.</p>
       )}
 
       {adGroupsQuery.data && adGroupsQuery.data.length > 0 && (
@@ -189,6 +190,13 @@ function SingleCampaignInsights({ link, provider }: { link: ProjectCampaignLink;
             </div>
           ))}
         </div>
+      )}
+
+      {!isGoogle && (
+        <p className="text-xs text-muted-foreground">
+          Resumos curados (dispositivo, geográfico, top termos/palavras-chave, demográfico) ainda só existem pra
+          campanhas do Google Ads.
+        </p>
       )}
 
       {insightsQuery.isLoading && <p className="text-sm text-muted-foreground">Buscando resumos da campanha...</p>}
