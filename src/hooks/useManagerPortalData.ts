@@ -2159,6 +2159,11 @@ export interface ManagerDigitalAssetRecord {
   status: string
   url: string | null
   code: string | null
+  /** Fase 38 — só usado quando type === 'google_forms': o "propósito"
+   * combinado no cadastro do Ativo (Genérico/Vendas/Objeções), copiado
+   * pra dentro da conexão assim que ela existir (ver
+   * digital_asset_connections.form_purpose, Fase 37). */
+  form_purpose: 'vendas' | 'perdido' | null
   client: { name: string } | null
 }
 
@@ -2672,6 +2677,8 @@ export interface NewDigitalAssetInput {
   status: string
   url: string | null
   code: string | null
+  /** Fase 38 — ver ManagerDigitalAssetRecord.form_purpose. */
+  form_purpose?: 'vendas' | 'perdido' | null
 }
 
 export function useCreateDigitalAsset() {
@@ -2696,9 +2703,23 @@ export function useUpdateDigitalAsset() {
     mutationFn: async ({ id, ...input }: NewDigitalAssetInput & { id: string }) => {
       const { error } = await supabase.from('digital_assets').update(input).eq('id', id)
       if (error) throw error
+      // Fase 38 — propaga o propósito também pra conexão google_forms já
+      // existente (se houver), senão a sincronização continuaria usando
+      // o valor antigo até desconectar/reconectar. RLS de
+      // digital_asset_connections só libera SELECT pro app (mesma razão
+      // de sempre), por isso via RPC (`set_asset_form_purpose`, ela
+      // mesma também já regrava o valor em `digital_assets`).
+      if ('form_purpose' in input) {
+        const { error: purposeError } = await supabase.rpc('set_asset_form_purpose', {
+          p_asset_id: id,
+          p_purpose: input.form_purpose ?? null,
+        })
+        if (purposeError) throw purposeError
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-digital-assets'] })
+      queryClient.invalidateQueries({ queryKey: ['digital-asset-connections'] })
     },
     onError: () => {
       toast.error('Não foi possível atualizar o ativo digital.')

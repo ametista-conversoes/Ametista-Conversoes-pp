@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { ManagerDigitalAssetRecord } from '@/hooks/useManagerPortalData'
 import { useAllClients, useCreateDigitalAsset, useUpdateDigitalAsset } from '@/hooks/useManagerPortalData'
+import { FORM_PURPOSE_NONE, FORM_PURPOSE_OPTIONS } from '@/lib/form-purpose'
 import { digitalAssetCodeTypes, digitalAssetStatusLabels, digitalAssetTypeLabels } from '@/lib/status-styles'
 
 const assetFormSchema = z.object({
@@ -31,11 +32,22 @@ const assetFormSchema = z.object({
     .refine((value) => !value || /^https?:\/\/.+/i.test(value), 'Digite um link válido (começando com http:// ou https://)'),
   code: z.string().optional(),
   status: z.enum(['active', 'inactive', 'pending', 'revoked']),
+  // Fase 38 — só usado quando type === 'google_forms'.
+  formPurpose: z.string().optional(),
 })
 
 type AssetFormValues = z.infer<typeof assetFormSchema>
 
-const EMPTY_VALUES: AssetFormValues = { name: '', clientId: '', type: '', platform: '', url: '', code: '', status: 'active' }
+const EMPTY_VALUES: AssetFormValues = {
+  name: '',
+  clientId: '',
+  type: '',
+  platform: '',
+  url: '',
+  code: '',
+  status: 'active',
+  formPurpose: FORM_PURPOSE_NONE,
+}
 
 interface AssetFormDialogProps {
   trigger: ReactNode
@@ -61,6 +73,7 @@ export function AssetFormDialog({ trigger, asset }: AssetFormDialogProps) {
 
   const selectedType = form.watch('type')
   const isCodeType = !!selectedType && digitalAssetCodeTypes.includes(selectedType)
+  const isGoogleForms = selectedType === 'google_forms'
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -75,6 +88,7 @@ export function AssetFormDialog({ trigger, asset }: AssetFormDialogProps) {
               url: asset.url ?? '',
               code: asset.code ?? '',
               status: asset.status as AssetFormValues['status'],
+              formPurpose: asset.form_purpose ?? FORM_PURPOSE_NONE,
             }
           : EMPTY_VALUES,
       )
@@ -90,6 +104,13 @@ export function AssetFormDialog({ trigger, asset }: AssetFormDialogProps) {
       url: !isCodeType && values.url?.trim() ? values.url.trim() : null,
       code: isCodeType && values.code?.trim() ? values.code.trim() : null,
       status: values.status,
+      // Fase 38 — só vale a pena guardar quando o tipo é mesmo
+      // "Formulário (Google Forms)"; nos outros tipos sempre null (não
+      // deixa lixo de uma troca de tipo anterior).
+      form_purpose:
+        isGoogleForms && values.formPurpose && values.formPurpose !== FORM_PURPOSE_NONE
+          ? (values.formPurpose as 'vendas' | 'perdido')
+          : null,
     }
     try {
       if (asset) {
@@ -191,6 +212,37 @@ export function AssetFormDialog({ trigger, asset }: AssetFormDialogProps) {
                 </FormItem>
               )}
             />
+
+            {isGoogleForms && (
+              <FormField
+                control={form.control}
+                name="formPurpose"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Propósito deste formulário</FormLabel>
+                    <Select value={field.value ?? FORM_PURPOSE_NONE} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {FORM_PURPOSE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Só afeta resposta nova sincronizada que ainda está "Novo" — nunca sobrescreve uma classificação
+                      manual já feita. Dá pra trocar depois, mesmo já conectado.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {isCodeType ? (
               <FormField

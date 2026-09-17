@@ -215,6 +215,10 @@ export const digitalAssetTypeLabels: Record<string, string> = {
   pixel: 'Pixel',
   tag: 'Tag',
   domain: 'Domínio',
+  // Fase 38 — escolher esse tipo já revela o campo "Propósito deste
+  // formulário" (Genérico/Vendas/Objeções) no próprio formulário de
+  // criar/editar Ativo, antes de existir qualquer conexão.
+  google_forms: 'Formulário (Google Forms)',
   other: 'Outro',
 }
 

@@ -384,7 +384,7 @@ async function handleConnect(req: Request, url: URL) {
 
   const { data: asset, error: assetError } = await supabase
     .from('digital_assets')
-    .select('id, client_id')
+    .select('id, client_id, form_purpose')
     .eq('id', digitalAssetId)
     .maybeSingle()
   if (assetError) return dbErrorResponse('handleConnect: buscar ativo digital', assetError)
@@ -402,7 +402,14 @@ async function handleConnect(req: Request, url: URL) {
   }
 
   const upsertPayload: Record<string, unknown> = { digital_asset_id: digitalAssetId, provider, status: 'disconnected' }
-  if (provider === 'google_forms') upsertPayload.external_account_id = extractFormId(formIdInput as string)
+  if (provider === 'google_forms') {
+    upsertPayload.external_account_id = extractFormId(formIdInput as string)
+    // Fase 38 — o propósito agora é escolhido no cadastro do Ativo
+    // Digital (Tipo "Formulário (Google Forms)"); copia pra dentro da
+    // conexão nova assim que ela é criada, sem precisar de nenhum
+    // clique extra depois de conectar.
+    upsertPayload.form_purpose = (asset as { form_purpose?: string | null }).form_purpose ?? null
+  }
 
   const { data: connection, error: connectionError } = await supabase
     .from('digital_asset_connections')
