@@ -44,7 +44,7 @@
 - [X] Testar: pedir "Esqueci minha senha", abrir o link recebido por e-mail, confirmar que cai em `/reset-password` (não em `/login`) e consegue trocar a senha de ponta a ponta. Repetir com um convite de cliente novo (Central de Informações → Acesso ao Portal) e com um link expirado de propósito (esperar o link vencer ou usar um já usado) — confirma o aviso "link expirado" em vez da tela de erro.
 
 ## 7. "Mudança de planos na Central de Informações" — reclamação ainda não esclarecida
-- [X] Ainda não sabemos exatamente o que quebra. Antes de virar um teste de aceite de verdade, precisa o usuário reproduzir e descrever: o que acontece ao mudar o campo Plano do cliente e clicar em Salvar (mensagem de erro? não salva? salva errado?).
+- [ ] **Tentativa de reprodução (Fase 39) não achou nada de errado**: testei ao vivo com Playwright (cliente de teste descartável, plano Validação → Dominação, "Salvar") — salvou normal, persistiu depois de recarregar a página, sem erro nenhum (`tests/e2e/item7-mudanca-plano.spec.ts`, mantido como regressão). Ainda preciso que o usuário descreva com mais detalhe o que quebra pra reproduzir de verdade: mensagem de erro exata? não salva? salva com o valor errado? acontece só em algum cliente específico (com dado já existente, tipo atividade recorrente ou reunião)?
 
 ## 8. Fase 30 — Tarefas do cliente separadas do Kanban interno
 - [X] **Atenção ao testar**: depois desse deploy, `/tasks` do Portal Cliente e o checklist de `/project` vão aparecer **vazios** pra todo cliente (a tabela nova `client_tasks` nasce sem nenhum dado) — isso é esperado, não é bug. Só volta a mostrar algo depois que o gestor aplicar um Workflow do Cliente ou o próprio cliente criar uma tarefa avulsa.
