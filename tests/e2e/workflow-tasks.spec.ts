@@ -54,11 +54,21 @@ test('aplicar um workflow cria as tarefas certas no projeto escolhido', async ({
     .locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]')
   await templateCard.getByRole('button', { name: 'Aplicar Workflow' }).click()
 
-  await page.getByRole('combobox').click()
-  await page.getByRole('option', { name: `${CLIENT_NAME} — ${PROJECT_TITLE}` }).click()
+  // Diálogo atual (pós-Fase 21/26): cliente, "Aplicar em..." (projeto ou
+  // Kanban solto) e, só quando "projeto" é escolhido, um 3º select com o
+  // projeto — não é mais um combobox único "Cliente — Projeto".
+  await page.getByRole('combobox').first().click()
+  await page.getByRole('option', { name: CLIENT_NAME, exact: true }).click()
+
+  await page.getByRole('combobox').nth(1).click()
+  await page.getByRole('option', { name: 'Tarefas de um projeto (Kanban interno)' }).click()
+
+  await page.getByRole('combobox').nth(2).click()
+  await page.getByRole('option', { name: PROJECT_TITLE, exact: true }).click()
+
   await page.getByRole('button', { name: 'Aplicar', exact: true }).click()
 
-  await expect(page.getByText('2 tarefas criadas no Kanban.')).toBeVisible()
+  await expect(page.getByText('2 tarefas criadas no projeto escolhido.')).toBeVisible()
 
   await page.goto(`/clients/${clientId}`)
   await expect(page.getByText(STEP_TITLES[0], { exact: true })).toBeVisible()
