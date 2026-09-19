@@ -2359,6 +2359,11 @@ export function useSetFormResponseStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['form-responses'] })
       queryClient.invalidateQueries({ queryKey: ['lead-status-counts'] })
+      // Fase 37, Bloco 3: o botão "Já é esse" do ManualLeadsDialog usa essa
+      // mesma mutation -- sem isso, a busca ficava com o resultado velho
+      // (botão "marcar Qualificado" continuava ali, status ainda "Novo" no
+      // subtítulo) mesmo depois do status já ter mudado de verdade no banco.
+      queryClient.invalidateQueries({ queryKey: ['search-form-responses'] })
     },
     onError: () => {
       toast.error('Não foi possível atualizar o status do lead.')
