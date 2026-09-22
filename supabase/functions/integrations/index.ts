@@ -1399,10 +1399,10 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
       `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${connection.external_account_id}/googleAds:search`,
       { method: 'POST', headers: googleAdsHeaders(accessToken, connection.login_customer_id), body: JSON.stringify({ query: campaignMetaQuery }) },
     )
+    const today = new Date().toISOString().slice(0, 10)
+    const knownCampaignIds = new Set(Array.from(byCampaign.values()).map((c) => c.campaignId))
     if (campaignMetaRes.ok) {
       const campaignMetaBody = await campaignMetaRes.json()
-      const knownCampaignIds = new Set(Array.from(byCampaign.values()).map((c) => c.campaignId))
-      const today = new Date().toISOString().slice(0, 10)
       for (const row of (campaignMetaBody.results ?? []) as Array<Record<string, Record<string, unknown>>>) {
         if (!accountName && row.customer?.descriptiveName) accountName = row.customer.descriptiveName as string
         const campaignId = row.campaign?.id != null ? String(row.campaign.id) : undefined
@@ -1427,6 +1427,69 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
       }
     } else {
       console.error('[integrations] syncConnection: metadados de campanha sem atividade falhou:', await campaignMetaRes.text())
+    }
+
+    // Achado ao vivo (usuário reportou): campanha VINCULADA a um projeto
+    // que é removida no Google Ads continuava "presa" no último status
+    // conhecido (ex: PAUSED) pra sempre — as duas consultas acima
+    // excluem `campaign.status = 'REMOVED'` de propósito (não faz
+    // sentido mostrar métrica/orçamento de uma campanha removida da
+    // conta inteira), mas isso também escondia a transição em si de
+    // check_campaign_state_changes(), que precisa exatamente desse
+    // último estado pra saber que precisa alertar. Consulta 3, só pelas
+    // campanhas que JÁ estão vinculadas a algum projeto (nunca a conta
+    // inteira — não cria linha de histórico pra campanha removida que
+    // ninguém tá acompanhando), sem excluir REMOVED, só pra pegar o
+    // status de quem ainda não apareceu em nenhuma das duas de cima.
+    const { data: linkedCampaigns } = await supabase
+      .from('project_campaign_links')
+      .select('external_campaign_id')
+      .eq('connection_id', connection.id)
+    const missingLinkedIds = Array.from(
+      new Set(
+        ((linkedCampaigns ?? []) as Array<{ external_campaign_id: string }>)
+          .map((l) => l.external_campaign_id)
+          .filter((id: string) => /^\d+$/.test(id) && !knownCampaignIds.has(id)),
+      ),
+    )
+    if (missingLinkedIds.length > 0) {
+      const removedCheckQuery = `
+        SELECT campaign.id, campaign.name, campaign.advertising_channel_type, campaign.status, campaign_budget.amount_micros,
+               customer.descriptive_name
+        FROM campaign
+        WHERE campaign.id IN (${missingLinkedIds.join(',')})
+      `
+      const removedCheckRes = await fetch(
+        `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${connection.external_account_id}/googleAds:search`,
+        { method: 'POST', headers: googleAdsHeaders(accessToken, connection.login_customer_id), body: JSON.stringify({ query: removedCheckQuery }) },
+      )
+      if (removedCheckRes.ok) {
+        const removedCheckBody = await removedCheckRes.json()
+        for (const row of (removedCheckBody.results ?? []) as Array<Record<string, Record<string, unknown>>>) {
+          if (!accountName && row.customer?.descriptiveName) accountName = row.customer.descriptiveName as string
+          const campaignId = row.campaign?.id != null ? String(row.campaign.id) : undefined
+          if (!campaignId || knownCampaignIds.has(campaignId)) continue
+          knownCampaignIds.add(campaignId)
+          const budgetMicros = row.campaignBudget?.amountMicros
+          byCampaign.set(`${campaignId}|${today}`, {
+            campaignId,
+            campaignName: (row.campaign?.name as string | undefined) ?? campaignId,
+            date: today,
+            spend: 0,
+            clicks: 0,
+            impressions: 0,
+            conversions: 0,
+            searchRankLostIS: null,
+            searchBudgetLostIS: null,
+            budgetAmount: budgetMicros != null ? Number(budgetMicros) / 1_000_000 : null,
+            campaignType: (row.campaign?.advertisingChannelType as string | undefined) ?? null,
+            conversionValue: 0,
+            status: (row.campaign?.status as string | undefined) ?? null,
+          })
+        }
+      } else {
+        console.error('[integrations] syncConnection: checagem de campanha removida falhou:', await removedCheckRes.text())
+      }
     }
   } else {
     // meta_ads — Insights da Graph API, já quebrado por dia
