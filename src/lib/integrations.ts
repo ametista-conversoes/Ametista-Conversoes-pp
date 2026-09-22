@@ -89,7 +89,12 @@ export async function selectGoogleAdsAccount(connectionId: string, account: Goog
   const res = await fetchFriendly(`${FUNCTIONS_BASE}/select-account`, {
     method: 'POST',
     headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ connection_id: connectionId, customer_id: account.id, login_customer_id: account.loginCustomerId }),
+    body: JSON.stringify({
+      connection_id: connectionId,
+      customer_id: account.id,
+      login_customer_id: account.loginCustomerId,
+      account_name: account.name,
+    }),
   })
   const body = await res.json()
   if (!res.ok) throw new Error(body.error ?? 'Não foi possível salvar a conta escolhida.')
@@ -178,6 +183,7 @@ export async function linkAgencyAccount(
       provider,
       external_account_id: account.id,
       login_customer_id: account.loginCustomerId,
+      external_account_name: account.name,
     }),
   })
   const body = await res.json()

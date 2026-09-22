@@ -149,6 +149,9 @@ export function AssetCard({ asset, deleteMode, connections }: AssetCardProps) {
               {connection.provider === 'google_forms' && connection.external_account_name && (
                 <p className="pl-4 text-xs text-muted-foreground/70">Formulário: {connection.external_account_name}</p>
               )}
+              {(connection.provider === 'google_ads' || connection.provider === 'meta_ads') && connection.external_account_name && (
+                <p className="pl-4 text-xs text-muted-foreground/70">Conta: {connection.external_account_name}</p>
+              )}
             </div>
           ))}
           {connectedConnection ? (

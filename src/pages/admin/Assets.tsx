@@ -248,6 +248,17 @@ export default function Assets() {
                       {connection.provider === 'google_forms' && connection.external_account_name && (
                         <p className="mt-0.5 text-xs text-purple-300">Formulário: {connection.external_account_name}</p>
                       )}
+                      {/* Mesma ideia, pra Google Ads/Meta Ads — nome real
+                          da conta de anúncios dentro do MCC/Business
+                          Manager, pra dar pra identificar qual conta é
+                          qual sem depender do rótulo digitado ao
+                          cadastrar o Ativo. Preenchido sozinho na próxima
+                          sincronização pra conexão que já existia antes
+                          desta mudança. */}
+                      {(connection.provider === 'google_ads' || connection.provider === 'meta_ads') &&
+                        connection.external_account_name && (
+                          <p className="mt-0.5 text-xs text-purple-300">Conta: {connection.external_account_name}</p>
+                        )}
                       <p className="mt-1 text-xs text-muted-foreground/70">
                         Última sincronização: {formatDateTime(connection.last_synced_at)}
                       </p>

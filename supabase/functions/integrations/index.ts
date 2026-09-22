@@ -664,7 +664,11 @@ async function handleCallback(url: URL) {
       if (accounts.length === 1) {
         await supabase
           .from('digital_asset_connections')
-          .update({ external_account_id: accounts[0].customerId, login_customer_id: accounts[0].loginCustomerId })
+          .update({
+            external_account_id: accounts[0].customerId,
+            login_customer_id: accounts[0].loginCustomerId,
+            external_account_name: accounts[0].name,
+          })
           .eq('id', connection.id)
       } else {
         console.error(
@@ -686,8 +690,12 @@ async function handleCallback(url: URL) {
         console.error('[integrations] handleCallback: listar ad accounts do Meta falhou:', adAccountsBody)
       }
       const firstAccountId = adAccountsBody.data?.[0]?.id as string | undefined
+      const firstAccountName = adAccountsBody.data?.[0]?.name as string | undefined
       if (firstAccountId) {
-        await supabase.from('digital_asset_connections').update({ external_account_id: firstAccountId }).eq('id', connection.id)
+        await supabase
+          .from('digital_asset_connections')
+          .update({ external_account_id: firstAccountId, external_account_name: firstAccountName ?? null })
+          .eq('id', connection.id)
       } else if (adAccountsRes.ok) {
         console.error('[integrations] handleCallback: listar ad accounts do Meta ok mas sem nenhuma conta acessível:', adAccountsBody)
       }
@@ -1248,6 +1256,16 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
   const accessToken = await resolveAccessToken(supabase, connection)
   if (!accessToken) return { ok: false, error: 'Não foi possível obter um token de acesso válido' }
 
+  // Nome real da conta (MCC descriptive_name / nome da conta de anúncios
+  // do Meta) — pego de graça junto da consulta de métricas de sempre
+  // (GAQL aceita campo de `customer` numa query `FROM campaign`; Meta
+  // Insights aceita `account_name` em qualquer nível) e gravado no final
+  // desta função em `digital_asset_connections.external_account_name`,
+  // pra "Integrações" mostrar qual conta é, dentro de um MCC com várias.
+  // Preenche/atualiza sozinho a cada sincronização, sem precisar
+  // reconectar — mesmo espírito do nome real do Google Forms (Fase 35.2).
+  let accountName: string | null = null
+
   const byDate = new Map<string, { spend: number; clicks: number; impressions: number; conversions: number }>()
   // Mesmos números que "byDate", só que quebrados por campanha também —
   // alimenta campaign_performance_snapshots (Fase 8.1b), sem mudar em
@@ -1292,7 +1310,8 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     const gaqlQuery = `
       SELECT segments.date, campaign.id, campaign.name, campaign.advertising_channel_type, campaign.status,
              metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions, metrics.conversions_value,
-             metrics.search_rank_lost_impression_share, metrics.search_budget_lost_impression_share, campaign_budget.amount_micros
+             metrics.search_rank_lost_impression_share, metrics.search_budget_lost_impression_share, campaign_budget.amount_micros,
+             customer.descriptive_name
       FROM campaign
       WHERE segments.date DURING LAST_30_DAYS
     `
@@ -1311,6 +1330,7 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     }
 
     for (const row of (searchBody.results ?? []) as Array<Record<string, Record<string, unknown>>>) {
+      if (!accountName && row.customer?.descriptiveName) accountName = row.customer.descriptiveName as string
       const date = row.segments?.date as string | undefined
       if (!date) continue
       const acc = byDate.get(date) ?? { spend: 0, clicks: 0, impressions: 0, conversions: 0 }
@@ -1370,7 +1390,8 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     // conta — cria uma linha "hoje" com métricas zeradas só pra essas
     // que não têm nenhuma linha ainda.
     const campaignMetaQuery = `
-      SELECT campaign.id, campaign.name, campaign.advertising_channel_type, campaign.status, campaign_budget.amount_micros
+      SELECT campaign.id, campaign.name, campaign.advertising_channel_type, campaign.status, campaign_budget.amount_micros,
+             customer.descriptive_name
       FROM campaign
       WHERE campaign.status != 'REMOVED'
     `
@@ -1383,6 +1404,7 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
       const knownCampaignIds = new Set(Array.from(byCampaign.values()).map((c) => c.campaignId))
       const today = new Date().toISOString().slice(0, 10)
       for (const row of (campaignMetaBody.results ?? []) as Array<Record<string, Record<string, unknown>>>) {
+        if (!accountName && row.customer?.descriptiveName) accountName = row.customer.descriptiveName as string
         const campaignId = row.campaign?.id != null ? String(row.campaign.id) : undefined
         if (!campaignId || knownCampaignIds.has(campaignId)) continue
         knownCampaignIds.add(campaignId)
@@ -1418,7 +1440,7 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     // dois níveis (byDate/byCampaign) a partir da mesma chamada.
     const insightsUrl = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${connection.external_account_id}/insights`)
     insightsUrl.searchParams.set('level', 'campaign')
-    insightsUrl.searchParams.set('fields', 'campaign_id,campaign_name,spend,clicks,impressions,actions,action_values')
+    insightsUrl.searchParams.set('fields', 'campaign_id,campaign_name,account_name,spend,clicks,impressions,actions,action_values')
     insightsUrl.searchParams.set('date_preset', 'last_30d')
     insightsUrl.searchParams.set('time_increment', '1')
     insightsUrl.searchParams.set('access_token', accessToken)
@@ -1459,6 +1481,7 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     }
 
     for (const row of (insightsBody.data ?? []) as Array<Record<string, unknown>>) {
+      if (!accountName && row.account_name) accountName = row.account_name as string
       const date = row.date_start as string | undefined
       if (!date) continue
       const actions = (row.actions ?? []) as Array<{ value?: string }>
@@ -1573,7 +1596,10 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     if (campaignUpsertError) return dbSyncError('syncConnection: upsert campaign_performance_snapshots', campaignUpsertError)
   }
 
-  await supabase.from('digital_asset_connections').update({ last_synced_at: new Date().toISOString() }).eq('id', connection.id)
+  await supabase
+    .from('digital_asset_connections')
+    .update({ last_synced_at: new Date().toISOString(), ...(accountName ? { external_account_name: accountName } : {}) })
+    .eq('id', connection.id)
 
   return { ok: true, syncedDays: rows.length }
 }
@@ -2584,7 +2610,7 @@ async function handleSelectAccount(req: Request) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
 
-  let body: { connection_id?: string; customer_id?: string; login_customer_id?: string }
+  let body: { connection_id?: string; customer_id?: string; login_customer_id?: string; account_name?: string }
   try {
     body = await req.json()
   } catch {
@@ -2609,7 +2635,11 @@ async function handleSelectAccount(req: Request) {
 
   const { error: updateError } = await supabase
     .from('digital_asset_connections')
-    .update({ external_account_id: body.customer_id, login_customer_id: body.login_customer_id })
+    .update({
+      external_account_id: body.customer_id,
+      login_customer_id: body.login_customer_id,
+      external_account_name: body.account_name ?? null,
+    })
     .eq('id', connection.id)
   if (updateError) return dbErrorResponse('handleSelectAccount: gravar conta escolhida', updateError)
 
@@ -2691,13 +2721,25 @@ async function handleLinkAgencyAccount(req: Request) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
 
-  let body: { digital_asset_id?: string; provider?: string; external_account_id?: string; login_customer_id?: string }
+  let body: {
+    digital_asset_id?: string
+    provider?: string
+    external_account_id?: string
+    login_customer_id?: string
+    external_account_name?: string
+  }
   try {
     body = await req.json()
   } catch {
     return jsonResponse({ error: 'Corpo inválido' }, 400)
   }
-  const { digital_asset_id: digitalAssetId, provider, external_account_id: externalAccountId, login_customer_id: loginCustomerId } = body
+  const {
+    digital_asset_id: digitalAssetId,
+    provider,
+    external_account_id: externalAccountId,
+    login_customer_id: loginCustomerId,
+    external_account_name: externalAccountName,
+  } = body
   if (!digitalAssetId || (provider !== 'google_ads' && provider !== 'meta_ads') || !externalAccountId) {
     return jsonResponse({ error: 'digital_asset_id, provider (google_ads/meta_ads) e external_account_id são obrigatórios' }, 400)
   }
@@ -2735,6 +2777,7 @@ async function handleLinkAgencyAccount(req: Request) {
       agency_provider_connection_id: agencyConnection.id,
       external_account_id: externalAccountId,
       login_customer_id: loginCustomerId ?? null,
+      external_account_name: externalAccountName ?? null,
     },
     { onConflict: 'digital_asset_id,provider', ignoreDuplicates: false },
   )
