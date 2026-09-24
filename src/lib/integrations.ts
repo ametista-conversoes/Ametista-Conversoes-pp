@@ -190,6 +190,21 @@ export async function linkAgencyAccount(
   if (!res.ok) throw new Error(body.error ?? 'Não foi possível vincular a conta.')
 }
 
+/** Conecta uma conexão de cliente (só meta_ads) direto com um token de
+ * acesso já obtido fora do app — uso avançado, pra contas que o token
+ * enxerga mas o Business Manager da agência não (ex: conta de
+ * sandbox/teste do Meta Ads). Pula o OAuth inteiro. */
+export async function connectWithToken(digitalAssetId: string, accessToken: string): Promise<{ externalAccountId: string; externalAccountName: string | null }> {
+  const res = await fetchFriendly(`${FUNCTIONS_BASE}/connect-with-token`, {
+    method: 'POST',
+    headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ digital_asset_id: digitalAssetId, provider: 'meta_ads', access_token: accessToken }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Não foi possível conectar com esse token.')
+  return { externalAccountId: body.external_account_id as string, externalAccountName: (body.external_account_name as string | null) ?? null }
+}
+
 export interface AgencyBusiness {
   id: string
   name: string | null

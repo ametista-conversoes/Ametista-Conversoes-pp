@@ -15,7 +15,14 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAgencyProviderConnections } from '@/hooks/useManagerPortalData'
 import type { ManagerDigitalAssetRecord } from '@/hooks/useManagerPortalData'
-import { type AgencyAdAccount, type AgencyProvider, connectIntegration, linkAgencyAccount, listAgencyAccounts } from '@/lib/integrations'
+import {
+  type AgencyAdAccount,
+  type AgencyProvider,
+  connectIntegration,
+  connectWithToken,
+  linkAgencyAccount,
+  listAgencyAccounts,
+} from '@/lib/integrations'
 
 const PROVIDER_LABELS: Record<'google_ads' | 'google_forms' | 'meta_ads', string> = {
   google_ads: 'Google Ads',
@@ -41,6 +48,8 @@ export function ConnectIntegrationDialog({ trigger, asset }: ConnectIntegrationD
   const [formId, setFormId] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [connecting, setConnecting] = useState(false)
+  const [showTokenField, setShowTokenField] = useState(false)
+  const [manualToken, setManualToken] = useState('')
   const queryClient = useQueryClient()
 
   const isAgencyProvider = provider === 'google_ads' || provider === 'meta_ads'
@@ -60,12 +69,34 @@ export function ConnectIntegrationDialog({ trigger, asset }: ConnectIntegrationD
       setProvider('google_ads')
       setFormId('')
       setSelectedAccountId('')
+      setShowTokenField(false)
+      setManualToken('')
     }
   }
 
   function handleProviderChange(next: IntegrationProvider) {
     setProvider(next)
     setSelectedAccountId('')
+    setShowTokenField(false)
+    setManualToken('')
+  }
+
+  async function handleConnectWithToken() {
+    if (!manualToken.trim()) {
+      toast.error('Cole o token de acesso.')
+      return
+    }
+    setConnecting(true)
+    try {
+      const result = await connectWithToken(asset.id, manualToken.trim())
+      queryClient.invalidateQueries({ queryKey: ['digital-asset-connections'] })
+      toast.success(`Conectado — ${result.externalAccountName ?? result.externalAccountId}.`)
+      setOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível conectar com esse token.')
+    } finally {
+      setConnecting(false)
+    }
   }
 
   async function handleConnectAgencyAccount(account: AgencyAdAccount) {
@@ -184,11 +215,49 @@ export function ConnectIntegrationDialog({ trigger, asset }: ConnectIntegrationD
               )}
             </div>
           )}
+
+          {/* Uso avançado — contas que o token enxerga mas o Business
+              Manager da agência não (ex: conta de sandbox/teste do Meta
+              Ads, criada pra testar a integração sem afetar dado real).
+              Só meta_ads: Google Ads sempre exige OAuth de verdade. */}
+          {provider === 'meta_ads' && (
+            <div className="space-y-2 border-t border-[#1A2540] pt-3">
+              {!showTokenField ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 text-xs text-muted-foreground"
+                  onClick={() => setShowTokenField(true)}
+                >
+                  Ou conectar com um token de acesso (avançado/sandbox)
+                </Button>
+              ) : (
+                <>
+                  <Label>Token de acesso (Meta Graph API)</Label>
+                  <Input
+                    type="password"
+                    placeholder="EAAxxxxxxxxxxxxx..."
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Pula o OAuth — usa esse token direto pra descobrir e conectar a conta de anúncios que ele enxerga
+                    (útil pra contas de sandbox/teste que não passam pelo Business Manager da agência).
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           {provider === 'google_forms' ? (
             <Button onClick={handleConnectGoogleForms} disabled={connecting}>
               {connecting ? 'Redirecionando...' : 'Conectar'}
+            </Button>
+          ) : showTokenField ? (
+            <Button onClick={handleConnectWithToken} disabled={connecting || !manualToken.trim()}>
+              {connecting ? 'Conectando...' : 'Conectar com token'}
             </Button>
           ) : (
             <Button

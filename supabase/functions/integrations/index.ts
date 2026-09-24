@@ -2849,6 +2849,132 @@ async function handleLinkAgencyAccount(req: Request) {
   return jsonResponse({ ok: true })
 }
 
+/** Conecta uma conexão de cliente (só meta_ads) usando um token de
+ * acesso já obtido fora do OAuth do app — caso real: conta de
+ * sandbox/teste do Meta Ads, cujo usuário dono do token não tem papel
+ * no Business Manager da agência, então nunca aparece no seletor de
+ * /agency-accounts (que só lista client_ad_accounts do BM já
+ * conectado). Não passa pela conexão de agência — grava direto em
+ * oauth_tokens, igual a uma conexão OAuth legada (handleCallback), só
+ * pulando o passo de redirecionar pro login do Meta. De propósito NÃO
+ * chama assertNoSiblingConnection: é uma ação explícita do admin pra
+ * ligar uma 2ª conta (sandbox) ao lado de uma conexão real já existente
+ * do mesmo cliente, não um engano acidental. */
+async function handleConnectWithToken(req: Request) {
+  const auth = await requireAdminOrGestor(req)
+  if (auth instanceof Response) return auth
+
+  let body: { digital_asset_id?: string; provider?: string; access_token?: string; external_account_id?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return jsonResponse({ error: 'Corpo inválido' }, 400)
+  }
+  const { digital_asset_id: digitalAssetId, provider, access_token: accessToken, external_account_id: forcedAccountId } = body
+  if (!digitalAssetId || !accessToken) {
+    return jsonResponse({ error: 'digital_asset_id e access_token são obrigatórios' }, 400)
+  }
+  if (provider !== 'meta_ads') {
+    return jsonResponse({ error: 'Conexão por token manual só existe pra meta_ads (Google Ads usa sempre OAuth).' }, 400)
+  }
+
+  const supabase = getServiceClient()
+
+  const { data: asset, error: assetError } = await supabase
+    .from('digital_assets')
+    .select('id, client_id')
+    .eq('id', digitalAssetId)
+    .maybeSingle()
+  if (assetError) return dbErrorResponse('handleConnectWithToken: buscar ativo digital', assetError)
+  if (!asset) return jsonResponse({ error: 'Ativo digital não encontrado' }, 404)
+
+  let externalAccountId = forcedAccountId ?? null
+  let externalAccountName: string | null = null
+
+  if (!externalAccountId) {
+    const adAccountsRes = await fetch(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/adaccounts?fields=id,name&access_token=${encodeURIComponent(accessToken)}`,
+    )
+    const adAccountsBody = await adAccountsRes.json()
+    if (!adAccountsRes.ok) {
+      await logServerError('integrations', 'handleConnectWithToken: listar ad accounts falhou', adAccountsBody)
+      return jsonResponse({ error: adAccountsBody?.error?.message ?? 'Token recusado pelo Meta.' }, 502)
+    }
+    const accounts = (adAccountsBody.data ?? []) as Array<{ id: string; name?: string }>
+    if (accounts.length === 0) {
+      return jsonResponse({ error: 'Esse token é válido, mas não enxerga nenhuma conta de anúncios.' }, 400)
+    }
+    if (accounts.length > 1) {
+      return jsonResponse(
+        {
+          error: 'Esse token enxerga mais de 1 conta de anúncios — informe qual usar.',
+          accounts: accounts.map((a) => ({ id: a.id, name: a.name ?? null })),
+        },
+        409,
+      )
+    }
+    externalAccountId = accounts[0].id
+    externalAccountName = accounts[0].name ?? null
+  }
+
+  const { data: accessSecretId, error: accessSecretError } = await supabase.rpc('store_oauth_secret', { secret: accessToken })
+  if (accessSecretError) {
+    console.error('[integrations] handleConnectWithToken: guardar token de acesso:', accessSecretError)
+    return jsonResponse({ error: 'Não foi possível guardar o token com segurança.' }, 500)
+  }
+
+  // Esse token não necessariamente veio do OAuth do nosso app (pode ter
+  // sido gerado à parte, ex: Graph API Explorer) — fb_exchange_token
+  // (refreshMetaAccessToken) pode recusar renovar se o app não bater.
+  // debug_token com o token do PRÓPRIO app (app_id|app_secret) diz a
+  // validade real quando disponível; se não conseguir descobrir, usa o
+  // mesmo padrão de 60 dias do OAuth normal — se vencer antes, a
+  // sincronização seguinte marca a conexão como "erro", já tratado.
+  let expiresInSeconds = 5_184_000
+  try {
+    const appToken = `${Deno.env.get('META_APP_ID') ?? ''}|${Deno.env.get('META_APP_SECRET') ?? ''}`
+    const debugRes = await fetch(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`,
+    )
+    const debugBody = await debugRes.json()
+    const expiresAt = debugBody?.data?.expires_at as number | undefined
+    if (debugRes.ok && typeof expiresAt === 'number' && expiresAt > 0) {
+      expiresInSeconds = Math.max(60, expiresAt - Math.floor(Date.now() / 1000))
+    }
+  } catch (err) {
+    console.error('[integrations] handleConnectWithToken: debug_token falhou, usando validade padrão:', err)
+  }
+
+  const { data: connectionRow, error: upsertError } = await supabase
+    .from('digital_asset_connections')
+    .upsert(
+      {
+        digital_asset_id: digitalAssetId,
+        provider: 'meta_ads',
+        status: 'connected',
+        agency_provider_connection_id: null,
+        external_account_id: externalAccountId,
+        external_account_name: externalAccountName,
+      },
+      { onConflict: 'digital_asset_id,provider', ignoreDuplicates: false },
+    )
+    .select('id')
+    .single()
+  if (upsertError) return dbErrorResponse('handleConnectWithToken: gravar conexão', upsertError)
+
+  const { error: tokenUpsertError } = await supabase.from('oauth_tokens').upsert(
+    {
+      connection_id: connectionRow.id,
+      access_token_secret_id: accessSecretId,
+      expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+    },
+    { onConflict: 'connection_id' },
+  )
+  if (tokenUpsertError) return dbErrorResponse('handleConnectWithToken: gravar oauth_tokens', tokenUpsertError)
+
+  return jsonResponse({ ok: true, external_account_id: externalAccountId, external_account_name: externalAccountName })
+}
+
 /** Fase 28 — só admin. Não desfaz conexões de cliente já vinculadas
  * (ficam sem token válido até a agência reconectar — mesmo espírito de
  * uma conexão legada cujo token expira sem conseguir renovar). */
@@ -2984,6 +3110,7 @@ Deno.serve(async (req) => {
     if (req.method === 'GET' && url.pathname.endsWith('/agency-businesses')) return await handleListAgencyBusinesses(req)
     if (req.method === 'POST' && url.pathname.endsWith('/select-agency-business')) return await handleSelectAgencyBusiness(req)
     if (req.method === 'POST' && url.pathname.endsWith('/link-agency-account')) return await handleLinkAgencyAccount(req)
+    if (req.method === 'POST' && url.pathname.endsWith('/connect-with-token')) return await handleConnectWithToken(req)
     if (req.method === 'POST' && url.pathname.endsWith('/agency-disconnect')) return await handleAgencyDisconnect(req)
     if (req.method === 'POST' && url.pathname.endsWith('/disconnect')) return await handleDisconnect(req)
     if (req.method === 'GET' && url.pathname.endsWith('/connect')) return await handleConnect(req, url)
@@ -2999,7 +3126,7 @@ Deno.serve(async (req) => {
     return jsonResponse(
       {
         error:
-          'Rota não encontrada. Use /agency-connect, /agency-accounts, /agency-businesses, /select-agency-business, /link-agency-account, /agency-disconnect, /disconnect, /connect, /callback, /campaigns, /ad-groups, /campaign-insights, /accounts, /select-account, /sync, /sync-all ou /forms-webhook.',
+          'Rota não encontrada. Use /agency-connect, /agency-accounts, /agency-businesses, /select-agency-business, /link-agency-account, /connect-with-token, /agency-disconnect, /disconnect, /connect, /callback, /campaigns, /ad-groups, /campaign-insights, /accounts, /select-account, /sync, /sync-all ou /forms-webhook.',
       },
       404,
     )
