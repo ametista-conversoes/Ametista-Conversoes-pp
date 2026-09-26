@@ -19,6 +19,7 @@ import type { ManagerProjectRecord, ManagerTaskRecord } from '@/hooks/useManager
 import {
   useCampaignPerformance,
   useDigitalAssetConnections,
+  useDismissCampaignProblem,
   useManagerClient,
   useProblemCampaignLinks,
   useProjectCampaignLinks,
@@ -178,6 +179,7 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
   const digitalAssetConnections = useDigitalAssetConnections()
   const problemCampaignLinksQuery = useProblemCampaignLinks()
   const projectProblems = (problemCampaignLinksQuery.data ?? []).filter((link) => link.project_id === project?.id)
+  const dismissCampaignProblem = useDismissCampaignProblem()
 
   return (
     <Dialog open={!!project} onOpenChange={onOpenChange}>
@@ -226,14 +228,26 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
                 </div>
 
                 {projectProblems.length > 0 && (
-                  <div className="space-y-1 rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2">
+                  <div className="space-y-1.5 rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2">
                     {projectProblems.map((problem) => (
-                      <p key={problem.id} className="flex items-center gap-1.5 text-xs text-orange-400">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                        Campanha "{problem.external_campaign_name ?? problem.external_campaign_id}"{' '}
-                        {campaignStateLabels[problem.last_known_status]?.toLowerCase() ?? problem.last_known_status} no{' '}
-                        {connectionProviderLabels[problem.provider] ?? problem.provider}.
-                      </p>
+                      <div key={problem.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="flex items-center gap-1.5 text-xs text-orange-400">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          Campanha "{problem.external_campaign_name ?? problem.external_campaign_id}"{' '}
+                          {campaignStateLabels[problem.last_known_status]?.toLowerCase() ?? problem.last_known_status} no{' '}
+                          {connectionProviderLabels[problem.provider] ?? problem.provider}.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 shrink-0 px-2 text-xs text-orange-400 hover:text-orange-300"
+                          disabled={dismissCampaignProblem.isPending}
+                          onClick={() => dismissCampaignProblem.mutate(problem.id)}
+                        >
+                          Já sei, dispensar
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 )}

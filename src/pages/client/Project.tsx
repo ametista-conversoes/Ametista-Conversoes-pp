@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FolderKanban } from 'lucide-react'
+import { AlertTriangle, FolderKanban } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { GoalsProgressCard } from '@/components/dashboard/GoalsProgressCard'
@@ -7,7 +7,7 @@ import { ProjectInfoCards } from '@/components/project/ProjectInfoCards'
 import { UnlinkedClientNotice } from '@/components/shared/UnlinkedClientNotice'
 import { TaskList } from '@/components/tasks/TaskList'
 import { useAuth } from '@/contexts/AuthContext'
-import { useClient, useProjects, useSmartGoals, useTasks } from '@/hooks/useClientPortalData'
+import { useClient, useProjectProblems, useProjects, useSmartGoals, useTasks } from '@/hooks/useClientPortalData'
 import { effectiveTaskStatus } from '@/lib/recurrence'
 import { cn } from '@/lib/utils'
 import { projectStatusLabels, projectStatusStyles } from '@/lib/status-styles'
@@ -18,6 +18,7 @@ export default function Project() {
   const { data: projects, isLoading: loadingProjects, isError: projectsIsError } = useProjects()
   const { data: tasks } = useTasks()
   const { data: goals } = useSmartGoals()
+  const { data: projectProblems } = useProjectProblems()
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   if (!clientId) {
@@ -53,6 +54,13 @@ export default function Project() {
       status: effectiveTaskStatus(task.status, task.recurrence_interval, task.completed_at, client?.plan ?? null),
     }))
 
+  // Fase 40.1 — "Projeto com problemas": campanha vinculada pausada/
+  // removida no Google/Meta Ads. Sem prazo de expiração aqui de
+  // propósito — só some quando o gestor dispensa ou a campanha volta a
+  // ficar ativa (ver useProjectProblems).
+  const projectsWithProblems = new Set((projectProblems ?? []).map((p) => p.project_id))
+  const currentProjectHasProblem = projectsWithProblems.has(project.id)
+
   return (
     <div className="space-y-6">
       <div>
@@ -80,7 +88,15 @@ export default function Project() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium text-foreground">{p.title}</p>
-                  <Badge className={projectStatusStyles[p.status]}>{projectStatusLabels[p.status] ?? p.status}</Badge>
+                  <div className="flex items-center gap-1">
+                    {projectsWithProblems.has(p.id) && (
+                      <Badge className="gap-1 border-orange-500/20 bg-orange-500/10 text-orange-400">
+                        <AlertTriangle className="h-3 w-3" />
+                        Projeto com problemas
+                      </Badge>
+                    )}
+                    <Badge className={projectStatusStyles[p.status]}>{projectStatusLabels[p.status] ?? p.status}</Badge>
+                  </div>
                 </div>
                 {p.objective && <p className="mt-1 text-xs text-muted-foreground">{p.objective}</p>}
               </div>
@@ -90,7 +106,15 @@ export default function Project() {
       )}
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-foreground">{project.title}</h2>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold text-foreground">{project.title}</h2>
+          {currentProjectHasProblem && (
+            <Badge className="gap-1 border-orange-500/20 bg-orange-500/10 text-orange-400">
+              <AlertTriangle className="h-3 w-3" />
+              Projeto com problemas
+            </Badge>
+          )}
+        </div>
         <div className="space-y-6">
           <ProjectInfoCards client={client} project={project} />
 

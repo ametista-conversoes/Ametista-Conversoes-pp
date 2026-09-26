@@ -705,27 +705,42 @@ export interface ProblemCampaignLink {
   external_campaign_id: string
   external_campaign_name: string | null
   last_known_status: 'PAUSED' | 'REMOVED'
+  problem_status_since: string | null
 }
+
+// Fase 40.1 — pedido do usuário: a mensagem não pode ficar aparecendo
+// pra sempre pro gestor (Integrações/Projeto/Central de Informações),
+// mesmo que ele nunca dispense manualmente — expira sozinha depois de 7
+// dias sem nenhuma mudança nova. Só vale pras telas do GESTOR; o Portal
+// do Cliente (useProjectHasProblem, useClientPortalData.ts) de propósito
+// NÃO usa esse prazo — só some de lá quando o gestor dispensa ou a
+// campanha volta a ficar ativa (pedido explícito: o cliente não pode
+// perder a visibilidade de um problema real só porque passou tempo).
+const PROBLEM_EXPIRY_DAYS = 7
 
 /** Toda campanha vinculada a um projeto cujo último estado conhecido
  * (`check_campaign_state_changes()`, checado a cada sincronização) é
- * Pausada ou Removida no Google/Meta Ads — usada pra avisar o gestor
- * dentro do próprio app (badge "Projeto com problemas" na Central de
- * Informações, banner no projeto, lista organizada em Integrações),
- * em vez de só existir como alerta em Incidentes e Alertas (pedido
- * explícito do usuário: "eu não vou saber se algo está indo errado se
- * tiver mais de um dia dentro do app que eu não tiver vindo [olhar
- * Incidentes]"). */
+ * Pausada ou Removida no Google/Meta Ads, ainda não dispensada pelo
+ * gestor e dentro do prazo de expiração (7 dias) — usada pra avisar o
+ * gestor dentro do próprio app (badge "Projeto com problemas" na
+ * Central de Informações, banner no projeto, lista organizada em
+ * Integrações), em vez de só existir como alerta em Incidentes e
+ * Alertas (pedido explícito do usuário: "eu não vou saber se algo está
+ * indo errado se tiver mais de um dia dentro do app que eu não tiver
+ * vindo [olhar Incidentes]"). */
 export function useProblemCampaignLinks() {
   return useQuery({
     queryKey: ['problem-campaign-links'],
     queryFn: async () => {
+      const cutoff = new Date(Date.now() - PROBLEM_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
       const { data, error } = await supabase
         .from('project_campaign_links')
         .select(
-          'id, project_id, connection_id, external_campaign_id, external_campaign_name, last_known_status, project:projects(title, client_id, client:clients(name)), connection:digital_asset_connections(provider, external_account_name)',
+          'id, project_id, connection_id, external_campaign_id, external_campaign_name, last_known_status, problem_status_since, project:projects(title, client_id, client:clients(name)), connection:digital_asset_connections(provider, external_account_name)',
         )
         .in('last_known_status', ['PAUSED', 'REMOVED'])
+        .is('problem_dismissed_at', null)
+        .gte('problem_status_since', cutoff)
       if (error) throw error
       return (
         data as unknown as Array<{
@@ -735,6 +750,7 @@ export function useProblemCampaignLinks() {
           external_campaign_id: string
           external_campaign_name: string | null
           last_known_status: 'PAUSED' | 'REMOVED'
+          problem_status_since: string | null
           project: { title: string; client_id: string; client: { name: string } | null } | null
           connection: { provider: 'google_ads' | 'meta_ads'; external_account_name: string | null } | null
         }>
@@ -750,7 +766,32 @@ export function useProblemCampaignLinks() {
         external_campaign_id: row.external_campaign_id,
         external_campaign_name: row.external_campaign_name,
         last_known_status: row.last_known_status,
+        problem_status_since: row.problem_status_since,
       })) as ProblemCampaignLink[]
+    },
+  })
+}
+
+/** Gestor "apaga" o aviso de UMA campanha específica (ex: pausou de
+ * propósito e já sabe) — grava `problem_dismissed_at`, some das 3 telas
+ * na hora. Volta a aparecer sozinho só se o status mudar de novo
+ * (`check_campaign_state_changes()` reseta o campo numa transição
+ * nova), nunca por essa mesma dispensa "expirar". */
+export function useDismissCampaignProblem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (linkId: string) => {
+      const { error } = await supabase
+        .from('project_campaign_links')
+        .update({ problem_dismissed_at: new Date().toISOString() })
+        .eq('id', linkId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['problem-campaign-links'] })
+    },
+    onError: () => {
+      toast.error('Não foi possível dispensar o aviso.')
     },
   })
 }

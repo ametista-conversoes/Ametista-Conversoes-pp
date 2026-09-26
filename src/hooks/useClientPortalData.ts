@@ -242,6 +242,36 @@ export function useAlerts() {
   })
 }
 
+export interface ProjectProblem {
+  project_id: string
+  last_known_status: 'PAUSED' | 'REMOVED'
+}
+
+/** Fase 40.1 — "Projeto com problemas" no Portal do Cliente: quais dos
+ * projetos deste cliente têm campanha vinculada Pausada/Removida no
+ * Google/Meta Ads. De propósito SEM prazo de expiração (diferente da
+ * versão do gestor, `useProblemCampaignLinks`) — só some daqui quando o
+ * gestor apaga o aviso (`problem_dismissed_at`) ou a campanha volta a
+ * ficar ativa (`check_campaign_state_changes()` zera os dois sozinho).
+ * RLS própria (`cliente_le_proprios_project_campaign_links`,
+ * migration-080) já restringe ao próprio cliente. */
+export function useProjectProblems() {
+  const { clientId } = useAuth()
+  return useQuery({
+    queryKey: ['project-problems', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('project_campaign_links')
+        .select('project_id, last_known_status')
+        .in('last_known_status', ['PAUSED', 'REMOVED'])
+        .is('problem_dismissed_at', null)
+      if (error) throw error
+      return data as ProjectProblem[]
+    },
+    enabled: !!clientId,
+  })
+}
+
 
 export function usePerformanceSnapshots() {
   const { clientId } = useAuth()

@@ -14,7 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAllClients, useAllDigitalAssets, useDigitalAssetConnections, useProblemCampaignLinks } from '@/hooks/useManagerPortalData'
+import {
+  useAllClients,
+  useAllDigitalAssets,
+  useDigitalAssetConnections,
+  useDismissCampaignProblem,
+  useProblemCampaignLinks,
+} from '@/hooks/useManagerPortalData'
 import { formatDateTime } from '@/lib/format'
 import { syncIntegration } from '@/lib/integrations'
 import {
@@ -40,6 +46,7 @@ export default function Assets() {
   const { data: assets, isLoading } = useAllDigitalAssets()
   const { data: connections } = useDigitalAssetConnections()
   const { data: problemCampaignLinks } = useProblemCampaignLinks()
+  const dismissCampaignProblem = useDismissCampaignProblem()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') === 'integracoes' ? 'integracoes' : 'ativos'
 
@@ -251,9 +258,21 @@ export default function Assets() {
                         {problem.connection_account_name ? ` · ${problem.connection_account_name}` : ''}
                       </p>
                     </div>
-                    <Badge className={campaignStateStyles[problem.last_known_status]}>
-                      {campaignStateLabels[problem.last_known_status] ?? problem.last_known_status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={campaignStateStyles[problem.last_known_status]}>
+                        {campaignStateLabels[problem.last_known_status] ?? problem.last_known_status}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                        disabled={dismissCampaignProblem.isPending}
+                        onClick={() => dismissCampaignProblem.mutate(problem.id)}
+                      >
+                        Já sei, dispensar
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </CardContent>
