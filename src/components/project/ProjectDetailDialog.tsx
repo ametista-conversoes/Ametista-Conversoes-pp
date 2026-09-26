@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, Pencil, Plus, X } from 'lucide-react'
+import { AlertTriangle, Check, Pencil, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,13 +20,20 @@ import {
   useCampaignPerformance,
   useDigitalAssetConnections,
   useManagerClient,
+  useProblemCampaignLinks,
   useProjectCampaignLinks,
   useUpdateProject,
 } from '@/hooks/useManagerPortalData'
 import { formatCurrency, formatDate, formatMultiplier, formatPercent } from '@/lib/format'
 import { computeRoas } from '@/lib/metrics'
 import { segmentationOptionGroups } from '@/lib/segmentation-options'
-import { campaignTypeLabels, connectionProviderLabels, projectStatusLabels, projectStatusStyles } from '@/lib/status-styles'
+import {
+  campaignStateLabels,
+  campaignTypeLabels,
+  connectionProviderLabels,
+  projectStatusLabels,
+  projectStatusStyles,
+} from '@/lib/status-styles'
 import { useForm } from 'react-hook-form'
 
 interface ProjectDetailDialogProps {
@@ -169,6 +176,8 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
   const effectiveRevenue = usingAutoRevenue ? autoRevenue : (project?.revenue ?? null)
 
   const digitalAssetConnections = useDigitalAssetConnections()
+  const problemCampaignLinksQuery = useProblemCampaignLinks()
+  const projectProblems = (problemCampaignLinksQuery.data ?? []).filter((link) => link.project_id === project?.id)
 
   return (
     <Dialog open={!!project} onOpenChange={onOpenChange}>
@@ -215,6 +224,19 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
                     </Badge>
                   )}
                 </div>
+
+                {projectProblems.length > 0 && (
+                  <div className="space-y-1 rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2">
+                    {projectProblems.map((problem) => (
+                      <p key={problem.id} className="flex items-center gap-1.5 text-xs text-orange-400">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Campanha "{problem.external_campaign_name ?? problem.external_campaign_id}"{' '}
+                        {campaignStateLabels[problem.last_known_status]?.toLowerCase() ?? problem.last_known_status} no{' '}
+                        {connectionProviderLabels[problem.provider] ?? problem.provider}.
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 {hasLinkedCampaigns && (
                   <p className="text-xs text-muted-foreground">

@@ -280,6 +280,20 @@ export const connectionProviderLabels: Record<string, string> = {
   meta_ads: 'Meta Ads',
 }
 
+// Estado de campanha (last_known_status de project_campaign_links,
+// mantido por check_campaign_state_changes()) — mesma severidade usada
+// pro alerta em si (medium/high), reaproveitando severityStyles acima
+// em vez de cores novas.
+export const campaignStateLabels: Record<string, string> = {
+  PAUSED: 'Pausada',
+  REMOVED: 'Removida',
+}
+
+export const campaignStateStyles: Record<string, string> = {
+  PAUSED: severityStyles.medium,
+  REMOVED: severityStyles.high,
+}
+
 export const connectionStatusLabels: Record<string, string> = {
   disconnected: 'Desconectado',
   connected: 'Conectado',

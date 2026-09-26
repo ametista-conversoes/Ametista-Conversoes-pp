@@ -693,6 +693,68 @@ export function useRemoveProjectCampaignLink() {
   })
 }
 
+export interface ProblemCampaignLink {
+  id: string
+  project_id: string
+  project_title: string
+  client_id: string
+  client_name: string
+  connection_id: string
+  provider: 'google_ads' | 'meta_ads'
+  connection_account_name: string | null
+  external_campaign_id: string
+  external_campaign_name: string | null
+  last_known_status: 'PAUSED' | 'REMOVED'
+}
+
+/** Toda campanha vinculada a um projeto cujo último estado conhecido
+ * (`check_campaign_state_changes()`, checado a cada sincronização) é
+ * Pausada ou Removida no Google/Meta Ads — usada pra avisar o gestor
+ * dentro do próprio app (badge "Projeto com problemas" na Central de
+ * Informações, banner no projeto, lista organizada em Integrações),
+ * em vez de só existir como alerta em Incidentes e Alertas (pedido
+ * explícito do usuário: "eu não vou saber se algo está indo errado se
+ * tiver mais de um dia dentro do app que eu não tiver vindo [olhar
+ * Incidentes]"). */
+export function useProblemCampaignLinks() {
+  return useQuery({
+    queryKey: ['problem-campaign-links'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('project_campaign_links')
+        .select(
+          'id, project_id, connection_id, external_campaign_id, external_campaign_name, last_known_status, project:projects(title, client_id, client:clients(name)), connection:digital_asset_connections(provider, external_account_name)',
+        )
+        .in('last_known_status', ['PAUSED', 'REMOVED'])
+      if (error) throw error
+      return (
+        data as unknown as Array<{
+          id: string
+          project_id: string
+          connection_id: string
+          external_campaign_id: string
+          external_campaign_name: string | null
+          last_known_status: 'PAUSED' | 'REMOVED'
+          project: { title: string; client_id: string; client: { name: string } | null } | null
+          connection: { provider: 'google_ads' | 'meta_ads'; external_account_name: string | null } | null
+        }>
+      ).map((row) => ({
+        id: row.id,
+        project_id: row.project_id,
+        project_title: row.project?.title ?? '',
+        client_id: row.project?.client_id ?? '',
+        client_name: row.project?.client?.name ?? 'Cliente',
+        connection_id: row.connection_id,
+        provider: row.connection?.provider ?? 'google_ads',
+        connection_account_name: row.connection?.external_account_name ?? null,
+        external_campaign_id: row.external_campaign_id,
+        external_campaign_name: row.external_campaign_name,
+        last_known_status: row.last_known_status,
+      })) as ProblemCampaignLink[]
+    },
+  })
+}
+
 export interface CampaignAdChangeLogEntry {
   id: string
   campaign_link_id: string

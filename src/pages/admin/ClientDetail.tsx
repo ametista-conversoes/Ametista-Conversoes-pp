@@ -31,7 +31,7 @@ import { CassieMessageForm } from '@/components/cassie/CassieMessageForm'
 import { OptionBreakdownBarChart } from '@/components/charts/OptionBreakdownBarChart'
 import { ProjectDetailDialog } from '@/components/project/ProjectDetailDialog'
 import { ApplyWorkflowDialog } from '@/components/workflows/ApplyWorkflowDialog'
-import type { ManagerProjectRecord } from '@/hooks/useManagerPortalData'
+import type { ManagerProjectRecord, ProblemCampaignLink } from '@/hooks/useManagerPortalData'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,6 +69,7 @@ import {
   useAudienceInsights,
   useDeleteProject,
   useManagerClient,
+  useProblemCampaignLinks,
   useRecomputeClientHealthScore,
   useToggleActivityChecklistItem,
   useUpdateClientDetails,
@@ -83,6 +84,7 @@ import { uploadClientLogo } from '@/lib/storage'
 import {
   clientStatusLabels,
   clientStatusStyles,
+  campaignStateLabels,
   connectionProviderLabels,
   getHealthScoreColor,
   meetingStatusLabels,
@@ -90,6 +92,7 @@ import {
   planLabels,
   projectStatusLabels,
   projectStatusStyles,
+  severityStyles,
   smartGoalStatusLabels,
   smartGoalStatusStyles,
   taskPriorityLabels,
@@ -109,6 +112,7 @@ export default function ClientDetail() {
   const { data: goals } = useAllSmartGoals()
   const { data: meetings } = useAllMeetings()
   const { data: alerts } = useAllAlerts()
+  const { data: problemCampaignLinks } = useProblemCampaignLinks()
   const { data: incidents } = useAllIncidents()
   const { data: audienceInsights } = useAudienceInsights(id ?? null)
   const { data: activityItems } = useActivityChecklistItems()
@@ -227,6 +231,17 @@ export default function ClientDetail() {
   }
 
   const clientProjects = (projects ?? []).filter((p) => p.client_id === client.id)
+  // Fase 40 — pedido do usuário: campanha pausada/removida no Google/Meta
+  // Ads já existia como alerta em Incidentes, mas ele só notava se
+  // entrasse ali todo dia; isso avisa direto na Central de Informações
+  // do cliente, onde ele já olha os projetos de qualquer jeito.
+  const clientProblemLinks = (problemCampaignLinks ?? []).filter((link) => link.client_id === client.id)
+  const projectProblems = new Map<string, ProblemCampaignLink[]>()
+  for (const link of clientProblemLinks) {
+    const existing = projectProblems.get(link.project_id) ?? []
+    existing.push(link)
+    projectProblems.set(link.project_id, existing)
+  }
   const clientTasks = (tasks ?? []).filter((t) => t.client_id === client.id)
   const clientGoals = (goals ?? []).filter((g) => g.client_id === client.id)
   const clientMeetings = (meetings ?? []).filter((m) => m.client_id === client.id)
@@ -610,7 +625,9 @@ export default function ClientDetail() {
         </CardHeader>
         <CardContent className="space-y-2 p-0 pt-4">
           {clientProjects.length === 0 && <p className="text-sm text-muted-foreground">Nenhum projeto ainda.</p>}
-          {clientProjects.map((project) => (
+          {clientProjects.map((project) => {
+            const problems = projectProblems.get(project.id) ?? []
+            return (
             <div key={project.id} className="rounded-lg bg-secondary/50 px-3 py-2 hover:bg-secondary">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p
@@ -620,6 +637,12 @@ export default function ClientDetail() {
                   {project.title}
                 </p>
                 <div className="flex items-center gap-1">
+                  {problems.length > 0 && (
+                    <Badge className={cn('gap-1', severityStyles.high)}>
+                      <AlertTriangle className="h-3 w-3" />
+                      Projeto com problemas
+                    </Badge>
+                  )}
                   {project.platform && (
                     <Badge className="border-[#1A2540] bg-secondary/50 text-muted-foreground">
                       {connectionProviderLabels[project.platform] ?? project.platform}
@@ -657,9 +680,17 @@ export default function ClientDetail() {
                 {project.description && (
                   <p className="mt-1 text-xs text-muted-foreground/70">{project.description}</p>
                 )}
+                {problems.map((problem) => (
+                  <p key={problem.id} className="mt-1 text-xs text-orange-400">
+                    ⚠ Campanha "{problem.external_campaign_name ?? problem.external_campaign_id}"{' '}
+                    {campaignStateLabels[problem.last_known_status]?.toLowerCase() ?? problem.last_known_status} no{' '}
+                    {connectionProviderLabels[problem.provider] ?? problem.provider}
+                  </p>
+                ))}
               </div>
             </div>
-          ))}
+            )
+          })}
         </CardContent>
       </Card>
 

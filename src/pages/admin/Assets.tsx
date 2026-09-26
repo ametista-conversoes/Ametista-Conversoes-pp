@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ListChecks, Plug, Plus, RefreshCw, Search, UserPlus } from 'lucide-react'
+import { AlertTriangle, ListChecks, Plug, Plus, RefreshCw, Search, UserPlus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AssetCard } from '@/components/assets/AssetCard'
@@ -14,10 +14,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAllClients, useAllDigitalAssets, useDigitalAssetConnections } from '@/hooks/useManagerPortalData'
+import { useAllClients, useAllDigitalAssets, useDigitalAssetConnections, useProblemCampaignLinks } from '@/hooks/useManagerPortalData'
 import { formatDateTime } from '@/lib/format'
 import { syncIntegration } from '@/lib/integrations'
-import { connectionProviderLabels, connectionStatusLabels, connectionStatusStyles } from '@/lib/status-styles'
+import {
+  campaignStateLabels,
+  campaignStateStyles,
+  connectionProviderLabels,
+  connectionStatusLabels,
+  connectionStatusStyles,
+} from '@/lib/status-styles'
 
 const ALL_CLIENTS = 'all'
 const SYNCABLE_PROVIDERS = ['google_ads', 'meta_ads', 'google_forms']
@@ -33,6 +39,7 @@ export default function Assets() {
   const { data: clients } = useAllClients()
   const { data: assets, isLoading } = useAllDigitalAssets()
   const { data: connections } = useDigitalAssetConnections()
+  const { data: problemCampaignLinks } = useProblemCampaignLinks()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') === 'integracoes' ? 'integracoes' : 'ativos'
 
@@ -119,6 +126,18 @@ export default function Assets() {
     .filter((row) => !!row.asset)
     .filter((row) => integrationClientFilter === ALL_CLIENTS || row.asset!.client_id === integrationClientFilter)
     .filter((row) => !integrationTerm || row.asset!.name.toLowerCase().includes(integrationTerm))
+
+  // Fase 40 — pedido do usuário: campanha pausada/removida no Google/Meta
+  // Ads já virava alerta em Incidentes, mas isso só ajuda quem entra lá
+  // todo dia — essa lista deixa visível de cara em Integrações, onde o
+  // gestor já olha as conexões de qualquer jeito. Removida primeiro
+  // (mais grave), depois por cliente.
+  const problemCampaigns = (problemCampaignLinks ?? [])
+    .filter((link) => integrationClientFilter === ALL_CLIENTS || link.client_id === integrationClientFilter)
+    .sort((a, b) => {
+      if (a.last_known_status !== b.last_known_status) return a.last_known_status === 'REMOVED' ? -1 : 1
+      return a.client_name.localeCompare(b.client_name)
+    })
 
   return (
     <div className="space-y-6">
@@ -208,6 +227,38 @@ export default function Assets() {
               </SelectContent>
             </Select>
           </div>
+
+          {problemCampaigns.length > 0 && (
+            <Card className="rounded-xl border border-orange-500/20 bg-[#131C31] p-5 md:p-6">
+              <CardHeader className="p-0">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <AlertTriangle className="h-4 w-4 text-orange-400" />
+                  Campanhas pausadas ou removidas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 p-0 pt-4">
+                {problemCampaigns.map((problem) => (
+                  <div
+                    key={problem.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-secondary/50 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        {problem.external_campaign_name ?? problem.external_campaign_id}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {problem.client_name} · Projeto "{problem.project_title}" · {connectionProviderLabels[problem.provider] ?? problem.provider}
+                        {problem.connection_account_name ? ` · ${problem.connection_account_name}` : ''}
+                      </p>
+                    </div>
+                    <Badge className={campaignStateStyles[problem.last_known_status]}>
+                      {campaignStateLabels[problem.last_known_status] ?? problem.last_known_status}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
             <CardHeader className="p-0">
