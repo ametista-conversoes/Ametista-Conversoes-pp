@@ -28,11 +28,6 @@ export function LegalPageLayout({ title, lastUpdated, children }: LegalPageLayou
         <h1 className="mt-4 text-2xl font-semibold text-foreground">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Última atualização: {lastUpdated}</p>
 
-        <div className="mt-4 rounded-lg border border-purple-600/20 bg-purple-600/10 p-4 text-sm text-muted-foreground">
-          Este é um rascunho, escrito com base em como o app funciona hoje — ainda não passou por revisão jurídica. Não
-          trate como versão definitiva antes de um advogado confirmar o conteúdo.
-        </div>
-
         <div className="mt-8 space-y-8 text-sm leading-relaxed text-muted-foreground [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-foreground [&_p]:mt-2 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5 [&_li]:marker:text-purple-400">
           {children}
         </div>

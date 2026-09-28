@@ -2,14 +2,15 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
 
 export default function PrivacyPolicy() {
   return (
-    <LegalPageLayout title="Política de Privacidade" lastUpdated="28 de agosto de 2026">
+    <LegalPageLayout title="Política de Privacidade" lastUpdated="28 de setembro de 2026">
       <section>
         <h2>1. Quem somos</h2>
         <p>
-          O Ametista Conversões é uma plataforma de gestão para agências de marketing de performance, operada pela
-          Ametista Conversões ("nós", "nossa agência"). Esta política explica quais dados o app coleta, para que os
-          usamos, com quem compartilhamos e quais direitos você tem sobre eles, em conformidade com a Lei Geral de
-          Proteção de Dados (LGPD — Lei nº 13.709/2018).
+          O Ametista Conversões é a plataforma interna da agência Ametista Conversões ("nós", "nossa agência"),
+          usada para gerir os projetos dos nossos clientes e reportar a eles os resultados das campanhas que
+          administramos. Esta política explica quais dados o app coleta, para que os usamos, com quem
+          compartilhamos e quais direitos você tem sobre eles, em conformidade com a Lei Geral de Proteção de Dados
+          (LGPD — Lei nº 13.709/2018).
         </p>
       </section>
 
@@ -54,7 +55,62 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>3. Para que usamos esses dados</h2>
+        <h2>3. Dados de usuário do Google (Google Ads e Google Forms)</h2>
+        <p>
+          Ao conectar uma conta do Google, o app pede 3 permissões (escopos), sempre com o consentimento explícito
+          de quem conecta:
+        </p>
+        <ul>
+          <li>
+            <strong>forms.body.readonly</strong> e <strong>forms.responses.readonly</strong>: quando um cliente
+            compartilha o formulário de captação de leads com a conta da agência como editor, o app lê as perguntas
+            (escopo "body") e as respostas (escopo "responses") desse formulário para montar a análise de público e
+            o funil de leads no relatório daquele cliente. Os dois são somente leitura; sozinho, o escopo de
+            perguntas não traz nenhuma resposta, e o escopo de respostas sozinho não traz o texto das perguntas
+            necessário para identificar o que cada resposta significa — por isso os dois são usados juntos.
+          </li>
+          <li>
+            <strong>adwords</strong>: conectamos nossa conta administradora (MCC) uma única vez; a partir dela o app
+            lista as contas de cliente vinculadas e lê campanhas, grupos de anúncios e métricas (investimento,
+            cliques, impressões, conversões) para montar os relatórios. A API do Google Ads não oferece um escopo
+            mais restrito ou somente leitura — <strong>adwords</strong> é a única opção disponível — e o app nunca
+            cria, edita ou exclui nada dentro do Google Ads.
+          </li>
+        </ul>
+        <p>
+          Esses dados são exibidos só para a nossa agência e para o respectivo cliente, protegidos por controle de
+          acesso no banco de dados (Row Level Security — ver seção 6), e nunca são vendidos ou compartilhados fora
+          dos prestadores de serviço listados na seção 5.
+        </p>
+        <p>
+          O uso e a transferência de informações recebidas das APIs do Google pelo Ametista Conversões seguirão a{' '}
+          <a
+            href="https://developers.google.com/terms/api-services-user-data-policy"
+            target="_blank"
+            rel="noreferrer"
+            className="text-purple-400 hover:underline"
+          >
+            Política de Dados do Usuário dos Serviços de API do Google
+          </a>
+          , incluindo os requisitos de Uso Limitado ("Limited Use").
+        </p>
+        <p>
+          Você pode revogar esse acesso a qualquer momento — pelo próprio app (Ativos Digitais → Integrações →
+          "Desconectar integração") ou diretamente na sua Conta Google, em{' '}
+          <a
+            href="https://myaccount.google.com/permissions"
+            target="_blank"
+            rel="noreferrer"
+            className="text-purple-400 hover:underline"
+          >
+            myaccount.google.com/permissions
+          </a>
+          .
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Para que usamos esses dados</h2>
         <ul>
           <li>Operar o app: mostrar dashboards, tarefas, projetos, relatórios e permitir a comunicação entre agência e cliente.</li>
           <li>Sincronizar métricas reais de campanhas para os relatórios de desempenho.</li>
@@ -65,11 +121,16 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>4. Com quem compartilhamos</h2>
+        <h2>5. Com quem compartilhamos</h2>
         <p>Não vendemos dados. Compartilhamos só com prestadores de serviço que operam o app, cada um recebendo só o necessário para sua função:</p>
         <ul>
           <li><strong>Supabase</strong> — hospeda o banco de dados, autenticação, arquivos enviados e a lógica do servidor.</li>
-          <li><strong>OpenAI</strong> — recebe o conteúdo das mensagens trocadas com a Cassie e com a Comunicação Persuasiva, para gerar as respostas.</li>
+          <li>
+            <strong>OpenAI</strong> — recebe o conteúdo das mensagens trocadas com a Cassie e com a Comunicação
+            Persuasiva, para gerar as respostas. Esses dados, incluindo qualquer trecho de resposta de formulário
+            usado como contexto, não são usados para treinar modelos de IA — nem pela Ametista Conversões, nem pela
+            OpenAI.
+          </li>
           <li><strong>Google</strong> — quando você conecta uma conta (login, Google Ads, Google Forms), trocamos dados de autenticação e sincronizamos métricas/respostas com a API do Google.</li>
           <li><strong>Meta</strong> — mesma lógica, para contas de Meta Ads conectadas.</li>
           <li><strong>Vercel</strong> — hospeda o site do app.</li>
@@ -78,7 +139,7 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>5. Como protegemos os dados</h2>
+        <h2>6. Como protegemos os dados</h2>
         <ul>
           <li>Cada cliente da agência só enxerga os próprios dados — reforçado por regras de acesso no banco de dados (Row Level Security), não só na tela.</li>
           <li>Tokens de acesso às contas de Google/Meta Ads ficam criptografados, nunca em texto puro.</li>
@@ -87,7 +148,7 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>6. Por quanto tempo guardamos</h2>
+        <h2>7. Por quanto tempo guardamos</h2>
         <p>
           Mantemos os dados enquanto sua conta ou a relação com a agência estiver ativa. Ao encerrar uma conta ou
           contrato, os dados podem ser apagados mediante solicitação, respeitando prazos legais de guarda quando
@@ -96,7 +157,7 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>7. Seus direitos (LGPD)</h2>
+        <h2>8. Seus direitos (LGPD)</h2>
         <p>Você pode, a qualquer momento, solicitar:</p>
         <ul>
           <li>Confirmação de quais dados seus temos e acesso a eles.</li>
@@ -109,7 +170,7 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>8. Cookies</h2>
+        <h2>9. Cookies</h2>
         <p>
           Usamos apenas o armazenamento local necessário para manter você conectado (sessão de login). Não usamos
           cookies de rastreamento ou de publicidade de terceiros.
@@ -117,17 +178,17 @@ export default function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>9. Menores de idade</h2>
+        <h2>10. Menores de idade</h2>
         <p>O app é uma ferramenta de uso profissional/empresarial, não é direcionado a menores de 18 anos.</p>
       </section>
 
       <section>
-        <h2>10. Alterações nesta política</h2>
+        <h2>11. Alterações nesta política</h2>
         <p>Podemos atualizar esta página conforme o app evolui. A data no topo sempre indica a versão mais recente.</p>
       </section>
 
       <section>
-        <h2>11. Contato</h2>
+        <h2>12. Contato</h2>
         <p>Dúvidas ou pedidos sobre seus dados: ametistaconversoes@gmail.com</p>
       </section>
     </LegalPageLayout>
