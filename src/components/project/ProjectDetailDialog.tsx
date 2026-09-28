@@ -44,6 +44,7 @@ interface ProjectDetailDialogProps {
 }
 
 interface CampaignFormValues {
+  title: string
   icp: string
   keywords: string
   segmentations: string[]
@@ -75,6 +76,7 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
 
   const form = useForm<CampaignFormValues>({
     defaultValues: {
+      title: '',
       icp: '',
       keywords: '',
       segmentations: [],
@@ -90,6 +92,7 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
   useEffect(() => {
     if (!project) return
     form.reset({
+      title: project.title,
       icp: project.icp ?? '',
       keywords: project.keywords ?? '',
       segmentations: project.segmentations,
@@ -124,9 +127,15 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
 
   async function onSubmit(values: CampaignFormValues) {
     if (!project) return
+    const title = values.title.trim()
+    if (!title) {
+      toast.error('O nome do projeto não pode ficar em branco.')
+      return
+    }
     try {
       await updateProject.mutateAsync({
         id: project.id,
+        title,
         icp: values.icp.trim() ? values.icp.trim() : null,
         keywords: values.keywords.trim() ? values.keywords.trim() : null,
         segmentations: values.segmentations,
@@ -400,6 +409,11 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
               </TabsContent>
 
               <TabsContent value="campaign" className="space-y-4">
+                <div>
+                  <label className="text-sm text-foreground">Nome do projeto</label>
+                  <Input placeholder="Nome do projeto..." {...form.register('title')} className="mt-1" />
+                </div>
+
                 <div>
                   <label className="text-sm text-foreground">Plataforma</label>
                   <Select

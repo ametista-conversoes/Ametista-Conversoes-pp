@@ -577,6 +577,7 @@ export function useCreateProject() {
 
 export interface UpdateProjectCampaignInput {
   id: string
+  title?: string
   icp?: string | null
   segmentations?: string[]
   objective?: string | null

@@ -191,6 +191,7 @@
 - [X] Novo projeto (Central de Informações → Projetos → Novo projeto) → campo "Plataforma" (Google Ads/Meta Ads, pré-selecionado Google Ads) → criar → confirma que aparece um badge com a plataforma escolhida na Visão Geral do projeto e na lista de Projetos da Central de Informações.
 - [X] Projeto criado antes dessa fase (sem plataforma salva) → não mostra badge nenhum (em vez de mostrar "null" ou quebrar); abrir a aba Campanha, o Select "Plataforma" aparece com "Google Ads" pré-selecionado (fallback) — salvar já grava a plataforma de verdade dali em diante.
 - [X] Confirmado ao vivo (Fase 39, 19/09): projeto com campanha Search real vinculada mostra o campo "Palavras-chave" na aba Campanha; projeto vinculado a uma campanha Meta Ads não mostra o campo.
+- [X] **Fase 42 (28/09) — renomear projeto pela aba Campanha**: confirmado ao vivo com Playwright — abrir um projeto → aba Campanha → campo "Nome do projeto" já vem preenchido com o nome atual → editar e "Salvar" → toast "Campanha atualizada.", o título no CABEÇALHO do diálogo atualiza na hora (sem precisar fechar/reabrir) e a lista de Projetos por trás também. Fechar o diálogo, recarregar a página e reabrir o mesmo projeto → nome novo persistiu de verdade no banco. Salvar em branco → bloqueado com toast de erro, não grava.
 
 ## 26. Workflows quebrando texto, menu do Portal Gestor reordenado, Integrações virou sub-aba de Ativos Digitais
 - [X] Sem migration nova, sem deploy de Edge Function — só frontend.

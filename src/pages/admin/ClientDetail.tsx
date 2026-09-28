@@ -132,7 +132,7 @@ export default function ClientDetail() {
   // aba Atividades.
   const [showStaleActivities, setShowStaleActivities] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
-  const [selectedProject, setSelectedProject] = useState<ManagerProjectRecord | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<ManagerProjectRecord | null>(null)
   const updateProject = useUpdateProject()
   const deleteProject = useDeleteProject()
@@ -231,6 +231,10 @@ export default function ClientDetail() {
   }
 
   const clientProjects = (projects ?? []).filter((p) => p.client_id === client.id)
+  // Deriva do dado vivo da query (em vez de guardar o objeto do projeto
+  // no state) pra que o diálogo reflita renomeações/edições na hora,
+  // sem precisar fechar e reabrir.
+  const selectedProject = clientProjects.find((p) => p.id === selectedProjectId) ?? null
   // Fase 40 — pedido do usuário: campanha pausada/removida no Google/Meta
   // Ads já existia como alerta em Incidentes, mas ele só notava se
   // entrasse ali todo dia; isso avisa direto na Central de Informações
@@ -632,7 +636,7 @@ export default function ClientDetail() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p
                   className="cursor-pointer text-sm font-medium text-foreground"
-                  onClick={() => setSelectedProject(project)}
+                  onClick={() => setSelectedProjectId(project.id)}
                 >
                   {project.title}
                 </p>
@@ -675,7 +679,7 @@ export default function ClientDetail() {
                   </Button>
                 </div>
               </div>
-              <div className="cursor-pointer" onClick={() => setSelectedProject(project)}>
+              <div className="cursor-pointer" onClick={() => setSelectedProjectId(project.id)}>
                 {project.objective && <p className="mt-1 text-xs text-muted-foreground">Objetivo: {project.objective}</p>}
                 {project.description && (
                   <p className="mt-1 text-xs text-muted-foreground/70">{project.description}</p>
@@ -778,7 +782,7 @@ export default function ClientDetail() {
       <ProjectDetailDialog
         project={selectedProject}
         tasks={clientTasks.filter((task) => task.project_id === selectedProject?.id)}
-        onOpenChange={(open) => !open && setSelectedProject(null)}
+        onOpenChange={(open) => !open && setSelectedProjectId(null)}
       />
 
       <Dialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
@@ -802,7 +806,7 @@ export default function ClientDetail() {
                 deleteProject.mutate(projectToDelete.id, {
                   onSuccess: () => {
                     setProjectToDelete(null)
-                    if (selectedProject?.id === projectToDelete.id) setSelectedProject(null)
+                    if (selectedProject?.id === projectToDelete.id) setSelectedProjectId(null)
                   },
                 })
               }}
