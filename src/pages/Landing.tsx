@@ -65,12 +65,18 @@ export default function Landing() {
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-muted-foreground">
           <span>© {new Date().getFullYear()} Ametista Conversões · ametistaconversoes@gmail.com</span>
-          <nav className="flex gap-4">
+          <nav className="flex flex-wrap gap-x-4 gap-y-1">
             <Link to="/privacy" className="text-purple-400 hover:underline">
-              Política de Privacidade / Privacy Policy
+              Política de Privacidade (PT)
+            </Link>
+            <Link to="/privacy/en" className="text-purple-400 hover:underline">
+              Privacy Policy (EN)
             </Link>
             <Link to="/terms" className="text-purple-400 hover:underline">
-              Termos de Uso / Terms of Use
+              Termos de Uso (PT)
+            </Link>
+            <Link to="/terms/en" className="text-purple-400 hover:underline">
+              Terms of Use (EN)
             </Link>
           </nav>
         </div>

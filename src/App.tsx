@@ -18,7 +18,9 @@ import Reports from '@/pages/client/Reports'
 import Tasks from '@/pages/client/Tasks'
 import Home from '@/pages/Home'
 import PrivacyPolicy from '@/pages/legal/PrivacyPolicy'
+import PrivacyPolicyEn from '@/pages/legal/PrivacyPolicyEn'
 import TermsOfUse from '@/pages/legal/TermsOfUse'
+import TermsOfUseEn from '@/pages/legal/TermsOfUseEn'
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 import Settings from '@/pages/Settings'
 import Assets from '@/pages/admin/Assets'
@@ -108,7 +110,9 @@ function App() {
       {/* Públicas de propósito (sem ProtectedRoute) — precisam abrir sem
           login pro Google conseguir verificar a tela de consentimento OAuth. */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/privacy/en" element={<PrivacyPolicyEn />} />
       <Route path="/terms" element={<TermsOfUse />} />
+      <Route path="/terms/en" element={<TermsOfUseEn />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>

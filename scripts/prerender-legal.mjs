@@ -40,7 +40,7 @@ const { renderLegalPage } = await import(pathToFileURL(path.join(ssrOutDir, 'ent
 
 const template = await readFile(path.join(root, 'dist/index.html'), 'utf-8')
 
-for (const route of ['/privacy', '/terms']) {
+for (const route of ['/privacy', '/privacy/en', '/terms', '/terms/en']) {
   const appHtml = renderLegalPage(route)
   const finalHtml = template.replace('<div id="root"></div>', `<div id="root">${appHtml}</div>`)
   const outDir = path.join(root, 'dist', route)
