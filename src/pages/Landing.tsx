@@ -80,17 +80,16 @@ export default function Landing() {
               </Button>
             </div>
 
-            {/* Print real do Dashboard Executivo (Portal Gestor) — pedido
-                do usuário, no mesmo espírito de mockup de produto que o
-                site principal da agência usa no hero. */}
-            <div className="relative">
-              <div className="pointer-events-none absolute -inset-4 rounded-2xl bg-purple-600/20 blur-2xl" />
-              <img
-                src="/dashboard-preview.png"
-                alt="Painel executivo do Ametista Conversões, com métricas de MRR, clientes ativos, churn e mais"
-                className="relative w-full rounded-xl border border-[#1A2540] shadow-2xl shadow-purple-950/40"
-              />
-            </div>
+            {/* Mockup de celular com o Dashboard Executivo (Portal Gestor)
+                dentro — pedido do usuário, mesmo espírito do gráfico de
+                produto que o site principal da agência mostra no hero.
+                A própria imagem já vem com fundo/glow prontos, por isso
+                sem card/borda por cima — só encaixa no layout. */}
+            <img
+              src="/hero-mockup.png"
+              alt="Celular mostrando o Dashboard Executivo do Ametista Conversões, com métricas de MRR, clientes ativos e mais"
+              className="w-full rounded-xl"
+            />
           </div>
         </section>
 
