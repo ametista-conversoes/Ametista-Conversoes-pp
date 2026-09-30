@@ -67,6 +67,10 @@ export function PersuasiveCopyPanel({ clientId, connectionIds, connectionId }: P
           )}
         </CardHeader>
         <CardContent className="space-y-4 p-0 pt-4">
+          <p className="text-xs text-muted-foreground">
+            Trechos das respostas do formulário são enviados à OpenAI só para gerar estas sugestões e não são usados
+            para treinar modelos de IA.
+          </p>
           {messagesLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
           {!messagesLoading && !hasConversation && !sending && (
             <p className="text-sm text-muted-foreground">

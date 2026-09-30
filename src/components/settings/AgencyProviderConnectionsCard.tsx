@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, KeyRound, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -215,6 +216,14 @@ export function AgencyProviderConnectionsCard({ canEdit }: AgencyProviderConnect
           Conecte a conta administradora do Google Ads (MCC) e o Business Manager do Meta uma única vez — depois disso, cada
           cliente escolhe a própria conta numa lista, sem precisar logar de novo. O vínculo entre a conta do cliente e o
           MCC/Business Manager precisa ser feito antes, manualmente, dentro do próprio Google Ads/Meta.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          O app vai ler, somente leitura, contas, campanhas e métricas. Nunca cria, edita ou exclui nada no Google Ads
+          nem no Meta Ads. Veja a{' '}
+          <Link to="/privacy" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline">
+            Política de Privacidade
+          </Link>
+          .
         </p>
 
         {isError && <p className="text-sm text-destructive">Erro ao carregar o status das conexões. Tente novamente.</p>}

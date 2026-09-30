@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -172,6 +173,14 @@ export function ConnectIntegrationDialog({ trigger, asset }: ConnectIntegrationD
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">Você vai ser levado pra tela de login do Google pra autorizar o acesso.</p>
+              <p className="text-xs text-muted-foreground">
+                O app vai ler, somente leitura, as perguntas e respostas deste formulário para a análise de público. Veja
+                a{' '}
+                <Link to="/privacy" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline">
+                  Política de Privacidade
+                </Link>
+                .
+              </p>
             </>
           )}
 
