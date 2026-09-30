@@ -57,26 +57,40 @@ export default function Landing() {
           <div className="pointer-events-none absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-purple-600/25 blur-[100px]" />
           <div className="pointer-events-none absolute -bottom-16 right-0 h-72 w-72 rounded-full bg-purple-500/15 blur-[100px]" />
 
-          <div className="relative mx-auto w-full max-w-5xl px-4 py-16 md:py-24">
-            <span className="inline-flex items-center rounded-full border border-purple-600/30 bg-purple-600/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-purple-400">
-              Portal interno da agência
-            </span>
-            <h1 className="mt-5 max-w-2xl text-4xl font-semibold leading-tight text-foreground md:text-5xl">
-              A plataforma interna da agência{' '}
-              <span className="bg-gradient-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
-                Ametista Conversões
+          <div className="relative mx-auto grid w-full max-w-5xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
+            <div>
+              <span className="inline-flex items-center rounded-full border border-purple-600/30 bg-purple-600/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-purple-400">
+                Portal interno da agência
               </span>
-            </h1>
-            <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">
-              Usada pela nossa agência de gestão de tráfego pago para acompanhar os projetos de cada cliente e
-              reportar resultados de forma transparente, com dados reais das plataformas de anúncio.
-            </p>
-            <Button asChild size="lg" className="mt-8">
-              <Link to={entrarHref}>
-                Entrar
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+              <h1 className="mt-5 text-4xl font-semibold leading-tight text-foreground md:text-5xl">
+                A plataforma interna da agência{' '}
+                <span className="bg-gradient-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
+                  Ametista Conversões
+                </span>
+              </h1>
+              <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">
+                Usada pela nossa agência de gestão de tráfego pago para acompanhar os projetos de cada cliente e
+                reportar resultados de forma transparente, com dados reais das plataformas de anúncio.
+              </p>
+              <Button asChild size="lg" className="mt-8">
+                <Link to={entrarHref}>
+                  Entrar
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+
+            {/* Print real do Dashboard Executivo (Portal Gestor) — pedido
+                do usuário, no mesmo espírito de mockup de produto que o
+                site principal da agência usa no hero. */}
+            <div className="relative">
+              <div className="pointer-events-none absolute -inset-4 rounded-2xl bg-purple-600/20 blur-2xl" />
+              <img
+                src="/dashboard-preview.png"
+                alt="Painel executivo do Ametista Conversões, com métricas de MRR, clientes ativos, churn e mais"
+                className="relative w-full rounded-xl border border-[#1A2540] shadow-2xl shadow-purple-950/40"
+              />
+            </div>
           </div>
         </section>
 
