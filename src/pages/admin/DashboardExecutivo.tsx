@@ -54,8 +54,15 @@ export default function DashboardExecutivo() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-muted-foreground">Portal Gestor</p>
-        <h1 className="text-2xl font-semibold text-foreground">Dashboard Executivo</h1>
+        <span className="inline-flex items-center rounded-full border border-purple-600/30 bg-purple-600/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-purple-400">
+          Portal Gestor
+        </span>
+        <h1 className="mt-2 text-2xl font-semibold text-foreground md:text-3xl">
+          Dashboard{' '}
+          <span className="bg-gradient-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
+            Executivo
+          </span>
+        </h1>
       </div>
 
       <div className="content-grid-container">
