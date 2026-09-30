@@ -1,11 +1,17 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/AuthContext'
 
-/** Página pública da raiz "/" para quem NÃO está logado (ver
- * ProtectedRoute.tsx). Existe por exigência da verificação OAuth do
- * Google: a homepage do app precisa descrever o que ele faz e ter o link
- * da Política de Privacidade — não pode ser só a tela de login. */
+/** Página pública da raiz "/" — SEMPRE, mesmo já logado (ver
+ * `App.tsx`: "/" não está dentro de `ProtectedRoute`). Existe por
+ * exigência da verificação OAuth do Google: a homepage do app precisa
+ * descrever o que ele faz e ter o link da Política de Privacidade —
+ * não pode ser só a tela de login. Quem já tem sessão clica em
+ * "Entrar" e vai direto pro painel (`/dashboard`, que decide o papel),
+ * sem passar pelo formulário de login de novo. */
 export default function Landing() {
+  const { session } = useAuth()
+
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-6">
@@ -14,7 +20,7 @@ export default function Landing() {
           <span className="font-semibold text-foreground">Ametista Conversões</span>
         </div>
         <Button asChild>
-          <Link to="/login">Entrar</Link>
+          <Link to={session ? '/dashboard' : '/login'}>Entrar</Link>
         </Button>
       </header>
 

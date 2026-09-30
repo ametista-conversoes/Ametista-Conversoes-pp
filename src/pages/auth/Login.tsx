@@ -44,7 +44,7 @@ export default function Login() {
       return
     }
 
-    const redirectTo = (location.state as { from?: string } | null)?.from ?? '/'
+    const redirectTo = (location.state as { from?: string } | null)?.from ?? '/dashboard'
     navigate(redirectTo, { replace: true })
   }
 

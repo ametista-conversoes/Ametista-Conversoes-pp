@@ -17,6 +17,7 @@ import Project from '@/pages/client/Project'
 import Reports from '@/pages/client/Reports'
 import Tasks from '@/pages/client/Tasks'
 import Home from '@/pages/Home'
+import Landing from '@/pages/Landing'
 import PrivacyPolicy from '@/pages/legal/PrivacyPolicy'
 import PrivacyPolicyEn from '@/pages/legal/PrivacyPolicyEn'
 import TermsOfUse from '@/pages/legal/TermsOfUse'
@@ -45,7 +46,7 @@ import Workflows from '@/pages/admin/Workflows'
 // com a página de exemplo até as próximas sub-fases da Fase 4.
 // "/settings" é compartilhada pelos 3 papéis (ver Sidebar.tsx).
 const clientPagesReady: Record<string, ComponentType> = {
-  '/': Home,
+  '/dashboard': Home,
   '/project': Project,
   '/reports': Reports,
   '/tasks': Tasks,
@@ -79,11 +80,12 @@ const managerPagesReady: Record<string, ComponentType> = {
 }
 
 // Rotas de "clientNavItems" compartilhadas pelos 3 papéis, fora do
-// RoleRoute abaixo: "/" tem seu próprio redirecionamento por papel
-// dentro de Home.tsx (envolver em RoleRoute causaria loop, já que o
-// AccessDenied do RoleRoute manda de volta pra "/"); "/settings" é
+// RoleRoute abaixo: "/dashboard" é o destino padrão pós-login pra
+// qualquer papel (Login.tsx/Register.tsx) e tem seu próprio
+// redirecionamento por papel dentro de Home.tsx — admin/gestor batem
+// ali de passagem e são mandados pra "/admin" na hora; "/settings" é
 // intencionalmente compartilhada pelos 3 papéis (ver Sidebar.tsx).
-const CLIENT_ROUTES_SHARED_WITH_OTHER_ROLES = new Set(['/', '/settings'])
+const CLIENT_ROUTES_SHARED_WITH_OTHER_ROLES = new Set(['/dashboard', '/settings'])
 
 function renderNavRoute(
   item: { href: string; title: string },
@@ -107,6 +109,12 @@ function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      {/* Pública sempre — mesmo já logado. É a homepage exigida pela
+          verificação OAuth do Google (não pode ser só o login); quem já
+          tem sessão clica em "Entrar" na própria página pra ir pro
+          painel (ver Landing.tsx), digitar a URL de uma página do
+          portal direto continua entrando normalmente. */}
+      <Route path="/" element={<Landing />} />
       {/* Públicas de propósito (sem ProtectedRoute) — precisam abrir sem
           login pro Google conseguir verificar a tela de consentimento OAuth. */}
       <Route path="/privacy" element={<PrivacyPolicy />} />

@@ -26,5 +26,8 @@ function AccessDenied() {
     })
   }, [])
 
-  return <Navigate to="/" replace />
+  // "/dashboard" (não "/", que agora é sempre a Landing pública) —
+  // Home.tsx manda cada papel pro lugar certo (admin/gestor pra
+  // "/admin", cliente fica ali mesmo), mesmo padrão de sempre.
+  return <Navigate to="/dashboard" replace />
 }

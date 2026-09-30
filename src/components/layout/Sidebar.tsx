@@ -34,7 +34,7 @@ function NavSection({
         <NavLink
           key={item.href}
           to={item.href}
-          end={item.href === '/' || item.href === '/admin'}
+          end={item.href === '/dashboard' || item.href === '/admin'}
           onClick={onNavigate}
           className={navLinkClassName}
         >

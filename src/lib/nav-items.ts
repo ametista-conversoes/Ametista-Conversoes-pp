@@ -29,7 +29,7 @@ export interface NavItem {
 }
 
 export const clientNavItems: NavItem[] = [
-  { title: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Projeto', href: '/project', icon: FolderKanban },
   { title: 'Tarefas', href: '/tasks', icon: CheckSquare },
   { title: 'Arquivos', href: '/files', icon: FileText },

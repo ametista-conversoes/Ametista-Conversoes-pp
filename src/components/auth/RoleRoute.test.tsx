@@ -34,7 +34,7 @@ function renderProtectedRoute(role: UserRole | null, allowedRoles: UserRole[], l
   return render(
     <MemoryRouter initialEntries={['/admin']}>
       <Routes>
-        <Route path="/" element={<div>Página inicial</div>} />
+        <Route path="/dashboard" element={<div>Página inicial</div>} />
         <Route element={<RoleRoute allowedRoles={allowedRoles} />}>
           <Route path="/admin" element={<div>Conteúdo do gestor</div>} />
         </Route>

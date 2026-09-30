@@ -50,7 +50,7 @@ export default function Register() {
     if (needsEmailConfirmation) {
       setSubmitted(true)
     } else {
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }
 
