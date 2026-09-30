@@ -2,7 +2,7 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
 
 export default function PrivacyPolicy() {
   return (
-    <LegalPageLayout title="Política de Privacidade" lastUpdated="28 de setembro de 2026">
+    <LegalPageLayout title="Política de Privacidade" lastUpdated="28 de setembro de 2026" altLangHref="/privacy/en">
       <section>
         <h2>1. Quem somos</h2>
         <p>

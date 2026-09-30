@@ -2,7 +2,7 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
 
 export default function TermsOfUse() {
   return (
-    <LegalPageLayout title="Termos de Uso" lastUpdated="28 de agosto de 2026">
+    <LegalPageLayout title="Termos de Uso" lastUpdated="28 de agosto de 2026" altLangHref="/terms/en">
       <section>
         <h2>1. Aceitação</h2>
         <p>

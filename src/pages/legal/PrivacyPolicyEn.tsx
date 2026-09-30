@@ -6,7 +6,7 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
  * esse arquivo precisa ser atualizado à mão junto. */
 export default function PrivacyPolicyEn() {
   return (
-    <LegalPageLayout title="Privacy Policy" lastUpdated="September 28, 2026" lang="en">
+    <LegalPageLayout title="Privacy Policy" lastUpdated="September 28, 2026" lang="en" altLangHref="/privacy">
       <section>
         <h2>1. Who we are</h2>
         <p>

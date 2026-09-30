@@ -6,7 +6,7 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
  * esse arquivo precisa ser atualizado à mão junto. */
 export default function TermsOfUseEn() {
   return (
-    <LegalPageLayout title="Terms of Use" lastUpdated="September 28, 2026" lang="en">
+    <LegalPageLayout title="Terms of Use" lastUpdated="September 28, 2026" lang="en" altLangHref="/terms">
       <section>
         <h2>1. Acceptance</h2>
         <p>By creating an account or using Ametista Conversões, you agree to these terms. If you do not agree, do not use the app.</p>
