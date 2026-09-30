@@ -54,11 +54,28 @@ export default function Landing() {
 
       <main className="flex-1">
         <section className="relative overflow-hidden">
-          <div className="pointer-events-none absolute -top-32 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-purple-600/25 blur-[100px]" />
-          <div className="pointer-events-none absolute -bottom-16 right-0 h-72 w-72 rounded-full bg-purple-500/15 blur-[100px]" />
+          {/* Mockup do Dashboard Executivo como imagem de fundo do
+              próprio cabeçalho (não mais um bloco separado ao lado do
+              texto) — a imagem já tem fundo/glow roxo prontos, por isso
+              o degradê por cima só precisa garantir a leitura do texto,
+              sem cobrir o celular por completo. */}
+          <div className="absolute inset-0">
+            {/* Desfocada no mobile: nesse tamanho o texto do próprio
+                dashboard (dentro da imagem) ficava embaixo do título e
+                competia com ele — o blur mantém a cor/luz de fundo sem
+                esse ruído. No desktop o celular fica ao lado do texto,
+                então some sem blur. */}
+            <img
+              src="/hero-mockup.png"
+              alt="Celular mostrando o Dashboard Executivo do Ametista Conversões, com métricas de MRR, clientes ativos e mais"
+              className="h-full w-full object-cover object-[80%_center] blur-md md:blur-none"
+            />
+            <div className="absolute inset-0 bg-background/70 md:hidden" />
+            <div className="absolute inset-0 hidden bg-gradient-to-r from-background via-background/85 to-background/20 md:block" />
+          </div>
 
-          <div className="relative mx-auto grid w-full max-w-5xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
-            <div>
+          <div className="relative mx-auto w-full max-w-5xl px-4 py-20 md:min-h-[560px] md:py-28">
+            <div className="max-w-lg">
               <span className="inline-flex items-center rounded-full border border-purple-600/30 bg-purple-600/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-purple-400">
                 Portal interno da agência
               </span>
@@ -79,17 +96,6 @@ export default function Landing() {
                 </Link>
               </Button>
             </div>
-
-            {/* Mockup de celular com o Dashboard Executivo (Portal Gestor)
-                dentro — pedido do usuário, mesmo espírito do gráfico de
-                produto que o site principal da agência mostra no hero.
-                A própria imagem já vem com fundo/glow prontos, por isso
-                sem card/borda por cima — só encaixa no layout. */}
-            <img
-              src="/hero-mockup.png"
-              alt="Celular mostrando o Dashboard Executivo do Ametista Conversões, com métricas de MRR, clientes ativos e mais"
-              className="w-full rounded-xl"
-            />
           </div>
         </section>
 
