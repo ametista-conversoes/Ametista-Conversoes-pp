@@ -123,13 +123,28 @@ const META_AGENCY_SCOPE = 'ads_read business_management'
 // desde a Fase 6.2 (que até aqui nunca eram usados de verdade).
 const GOOGLE_FORMS_API_BASE = 'https://forms.googleapis.com/v1/forms'
 
-// Restrito ao domínio de produção (deploy na Vercel) — antes era '*'
-// (qualquer site podia chamar), trocado ao publicar o app de verdade.
-// Não afeta /callback (redirect direto do Google/Meta, não é chamada
-// de navegador sujeita a CORS) nem /forms-webhook (chamada servidor-a-
-// servidor do Google Apps Script, também não passa por CORS).
+// Restrito a uma lista de domínios conhecidos — antes era '*' (qualquer
+// site podia chamar), trocado ao publicar o app de verdade. Inclui
+// localhost:5173 (servidor de dev do Vite) porque não existe um deploy
+// separado desta função pra "ambiente de teste": todo teste ao vivo
+// (Playwright, `npm run dev`) chama este MESMO backend de produção a
+// partir do navegador local — sem isso, toda chamada de UI a esta
+// função falha com erro de CORS (achado ao vivo, 03/10: o front rodando
+// em localhost não conseguia ler a resposta de `/agency-accounts`,
+// mesmo a chamada em si tendo funcionado do lado do Google). Não afeta
+// /callback (redirect direto do Google/Meta, não é chamada de navegador
+// sujeita a CORS) nem /forms-webhook (chamada servidor-a-servidor do
+// Google Apps Script, também não passa por CORS).
+const ALLOWED_ORIGINS = new Set(['https://ametistaconversoes.app', 'http://localhost:5173'])
+const DEFAULT_ORIGIN = 'https://ametistaconversoes.app'
+
+function resolveAllowedOrigin(req: Request): string {
+  const origin = req.headers.get('origin')
+  return origin && ALLOWED_ORIGINS.has(origin) ? origin : DEFAULT_ORIGIN
+}
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://ametistaconversoes.app',
+  'Access-Control-Allow-Origin': DEFAULT_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
 }
 
@@ -3097,13 +3112,7 @@ async function handleSelectAgencyBusiness(req: Request) {
   return jsonResponse({ ok: true })
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  const url = new URL(req.url)
-
+async function routeRequest(req: Request, url: URL): Promise<Response> {
   try {
     if (req.method === 'GET' && url.pathname.endsWith('/agency-connect')) return await handleAgencyConnect(req, url)
     if (req.method === 'GET' && url.pathname.endsWith('/agency-accounts')) return await handleListAgencyAccounts(req, url)
@@ -3135,4 +3144,18 @@ Deno.serve(async (req) => {
     await logServerError('integrations', 'erro inesperado', err)
     return jsonResponse({ error: 'Erro inesperado. Tente novamente.' }, 500)
   }
+}
+
+Deno.serve(async (req) => {
+  const allowOrigin = resolveAllowedOrigin(req)
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: { ...corsHeaders, 'Access-Control-Allow-Origin': allowOrigin, Vary: 'Origin' } })
+  }
+
+  const url = new URL(req.url)
+  const response = await routeRequest(req, url)
+  response.headers.set('Access-Control-Allow-Origin', allowOrigin)
+  response.headers.set('Vary', 'Origin')
+  return response
 })
