@@ -1,6 +1,18 @@
 {
   "routes": [
     {
+      "src": "/(.*)",
+      "headers": {
+        "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://ktexhzcpqrqjdgzgxisx.supabase.co; connect-src 'self' https://ktexhzcpqrqjdgzgxisx.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+        "X-Frame-Options": "DENY",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), geolocation=(), microphone=(self)",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
+      },
+      "continue": true
+    },
+    {
       "src": "/oauth/google-callback",
       "dest": "https://ktexhzcpqrqjdgzgxisx.supabase.co/functions/v1/integrations/callback"
     },
