@@ -58,8 +58,20 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+// Mesmo padrão de integrations/index.ts (Fase 44) e cassie/index.ts
+// (Fase 46): lista de domínios conhecidos em vez de um único fixo, pra
+// permitir teste ao vivo a partir de localhost contra este mesmo
+// backend de produção.
+const ALLOWED_ORIGINS = new Set(['https://ametistaconversoes.app', 'http://localhost:5173'])
+const DEFAULT_ORIGIN = 'https://ametistaconversoes.app'
+
+function resolveAllowedOrigin(req: Request): string {
+  const origin = req.headers.get('origin')
+  return origin && ALLOWED_ORIGINS.has(origin) ? origin : DEFAULT_ORIGIN
+}
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://ametistaconversoes.app',
+  'Access-Control-Allow-Origin': DEFAULT_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -244,13 +256,7 @@ async function handleUnlink(req: Request): Promise<Response> {
   return jsonResponse({ ok: true })
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  const url = new URL(req.url)
-
+async function routeRequest(req: Request, url: URL): Promise<Response> {
   try {
     if (req.method === 'GET' && url.pathname.endsWith('/linked')) return await handleLinked(req)
     if (req.method === 'POST' && url.pathname.endsWith('/link')) return await handleLink(req)
@@ -262,4 +268,18 @@ Deno.serve(async (req) => {
     await logServerError('client-access', 'erro inesperado', err)
     return jsonResponse({ error: 'Erro inesperado. Tente novamente.' }, 500)
   }
+}
+
+Deno.serve(async (req) => {
+  const allowOrigin = resolveAllowedOrigin(req)
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: { ...corsHeaders, 'Access-Control-Allow-Origin': allowOrigin, Vary: 'Origin' } })
+  }
+
+  const url = new URL(req.url)
+  const response = await routeRequest(req, url)
+  response.headers.set('Access-Control-Allow-Origin', allowOrigin)
+  response.headers.set('Vary', 'Origin')
+  return response
 })

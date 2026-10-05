@@ -47,10 +47,22 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 const OPENAI_MODEL = 'gpt-5-mini' // linha "mini", mais barata — trocar aqui se quiser subir de modelo depois
 const HISTORY_LIMIT = 20 // últimas mensagens incluídas como contexto, pra não deixar a conversa cara conforme cresce
 
-// Restrito ao domínio de produção (deploy na Vercel) — antes era '*'
-// (qualquer site podia chamar), trocado ao publicar o app de verdade.
+// Restrito a uma lista de domínios conhecidos — antes era '*' (qualquer
+// site podia chamar), trocado ao publicar o app de verdade. Inclui
+// localhost:5173 pelo mesmo motivo documentado em integrations/index.ts
+// (Fase 44): não existe deploy separado desta função pra "ambiente de
+// teste", todo teste ao vivo chama este mesmo backend de produção a
+// partir do navegador local.
+const ALLOWED_ORIGINS = new Set(['https://ametistaconversoes.app', 'http://localhost:5173'])
+const DEFAULT_ORIGIN = 'https://ametistaconversoes.app'
+
+function resolveAllowedOrigin(req: Request): string {
+  const origin = req.headers.get('origin')
+  return origin && ALLOWED_ORIGINS.has(origin) ? origin : DEFAULT_ORIGIN
+}
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://ametistaconversoes.app',
+  'Access-Control-Allow-Origin': DEFAULT_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -99,6 +111,36 @@ async function openaiErrorResponse(context: string, body: unknown) {
   console.error(`[cassie] ${context} — erro da OpenAI:`, body)
   await logServerError('cassie', `${context} — erro da OpenAI`, body)
   return jsonResponse({ error: 'Erro ao consultar a IA. Tente novamente.' }, 502)
+}
+
+// Fase 46 — rate limiting por usuário: a Cassie chama a OpenAI (custo
+// real por mensagem) e qualquer cliente/admin/gestor autenticado
+// consegue chamar `/chat` sem nenhum limite hoje. Contador vive no
+// Postgres (`check_rate_limit`, migration-083) porque não há memória
+// confiável compartilhada entre invocações do Deno.
+async function checkRateLimit(userId: string, bucket: string, windowSeconds: number, maxHits: number): Promise<boolean> {
+  const { data: allowed, error } = await getServiceClient().rpc('check_rate_limit', {
+    p_user_id: userId,
+    p_bucket: bucket,
+    p_window_seconds: windowSeconds,
+    p_max_hits: maxHits,
+  })
+  if (error) {
+    await logServerError('cassie', `checkRateLimit: ${bucket}`, error)
+    return true // fail-open — um problema de infra aqui não pode derrubar tráfego real
+  }
+  return allowed === true
+}
+
+async function enforceRateLimit(
+  userId: string,
+  checks: Array<{ bucket: string; windowSeconds: number; maxHits: number }>,
+): Promise<Response | null> {
+  for (const c of checks) {
+    const ok = await checkRateLimit(userId, c.bucket, c.windowSeconds, c.maxHits)
+    if (!ok) return jsonResponse({ error: 'Muitas requisições. Aguarde um pouco antes de tentar de novo.' }, 429)
+  }
+  return null
 }
 
 type CassieMode = 'assistente' | 'analista' | 'consultora' | 'auditora'
@@ -304,6 +346,11 @@ function extractReplyText(data: { output?: Array<{ type: string; role?: string; 
 async function handleChat(req: Request) {
   const auth = await requireCassieCaller(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [
+    { bucket: 'cassie_chat_burst', windowSeconds: 300, maxHits: 20 },
+    { bucket: 'cassie_chat_daily', windowSeconds: 86400, maxHits: 150 },
+  ])
+  if (limited) return limited
 
   let body: { client_id?: string; message?: string; mode?: string }
   try {
@@ -471,6 +518,11 @@ async function handlePersuasiveCopy(req: Request) {
   if (auth.role !== 'admin' && auth.role !== 'gestor') {
     return jsonResponse({ error: 'Só admin/gestor pode gerar sugestões de comunicação persuasiva.' }, 403)
   }
+  const limited = await enforceRateLimit(auth.userId, [
+    { bucket: 'cassie_copy_burst', windowSeconds: 300, maxHits: 15 },
+    { bucket: 'cassie_copy_daily', windowSeconds: 86400, maxHits: 100 },
+  ])
+  if (limited) return limited
 
   let body: { client_id?: string; connection_id?: string; message?: string }
   try {
@@ -574,13 +626,7 @@ async function handlePersuasiveCopy(req: Request) {
   return jsonResponse({ reply: replyText })
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  const url = new URL(req.url)
-
+async function routeRequest(req: Request, url: URL): Promise<Response> {
   try {
     if (req.method === 'POST' && url.pathname.endsWith('/chat')) return await handleChat(req)
     if (req.method === 'POST' && url.pathname.endsWith('/persuasive-copy')) return await handlePersuasiveCopy(req)
@@ -590,4 +636,18 @@ Deno.serve(async (req) => {
     await logServerError('cassie', 'erro inesperado', err)
     return jsonResponse({ error: 'Erro inesperado. Tente novamente.' }, 500)
   }
+}
+
+Deno.serve(async (req) => {
+  const allowOrigin = resolveAllowedOrigin(req)
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: { ...corsHeaders, 'Access-Control-Allow-Origin': allowOrigin, Vary: 'Origin' } })
+  }
+
+  const url = new URL(req.url)
+  const response = await routeRequest(req, url)
+  response.headers.set('Access-Control-Allow-Origin', allowOrigin)
+  response.headers.set('Vary', 'Origin')
+  return response
 })

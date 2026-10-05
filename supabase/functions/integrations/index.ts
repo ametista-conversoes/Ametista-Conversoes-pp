@@ -242,6 +242,37 @@ async function dbErrorResponse(context: string, error: { message: string }) {
   return jsonResponse({ error: 'Erro ao acessar o banco de dados. Tente novamente.' }, 500)
 }
 
+// Fase 46 — rate limiting por usuário: as rotas de sync/listagem batem
+// na API real do Google Ads/Meta, que compartilham uma quota única por
+// token de desenvolvedor da agência inteira — um script em loop (ou uma
+// conta comprometida) pode esgotar/derrubar o token pra todo mundo.
+// Contador vive no Postgres (`check_rate_limit`, migration-083) porque
+// não há memória confiável compartilhada entre invocações do Deno.
+async function checkRateLimit(userId: string, bucket: string, windowSeconds: number, maxHits: number): Promise<boolean> {
+  const { data: allowed, error } = await getServiceClient().rpc('check_rate_limit', {
+    p_user_id: userId,
+    p_bucket: bucket,
+    p_window_seconds: windowSeconds,
+    p_max_hits: maxHits,
+  })
+  if (error) {
+    await logServerError('integrations', `checkRateLimit: ${bucket}`, error)
+    return true // fail-open — um problema de infra aqui não pode derrubar tráfego real
+  }
+  return allowed === true
+}
+
+async function enforceRateLimit(
+  userId: string,
+  checks: Array<{ bucket: string; windowSeconds: number; maxHits: number }>,
+): Promise<Response | null> {
+  for (const c of checks) {
+    const ok = await checkRateLimit(userId, c.bucket, c.windowSeconds, c.maxHits)
+    if (!ok) return jsonResponse({ error: 'Muitas requisições. Aguarde um pouco antes de tentar de novo.' }, 429)
+  }
+  return null
+}
+
 async function platformErrorResponse(context: string, platform: string, body: unknown) {
   console.error(`[integrations] ${context} — erro da ${platform}:`, body)
   await logServerError('integrations', `${context} — erro da ${platform}`, body)
@@ -1925,6 +1956,11 @@ async function syncFormsConnection(supabase: SupabaseClient, connection: Syncabl
 async function handleSync(req: Request) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [
+    { bucket: 'integrations_sync_burst', windowSeconds: 300, maxHits: 10 },
+    { bucket: 'integrations_sync_daily', windowSeconds: 86400, maxHits: 150 },
+  ])
+  if (limited) return limited
 
   let body: { connection_id?: string }
   try {
@@ -1975,6 +2011,8 @@ async function handleSync(req: Request) {
 async function handleListCampaigns(req: Request, url: URL) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [{ bucket: 'integrations_read_burst', windowSeconds: 300, maxHits: 60 }])
+  if (limited) return limited
 
   const connectionId = url.searchParams.get('connection_id')
   if (!connectionId) return jsonResponse({ error: 'connection_id é obrigatório' }, 400)
@@ -2054,6 +2092,8 @@ async function handleListCampaigns(req: Request, url: URL) {
 async function handleListAdGroups(req: Request, url: URL) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [{ bucket: 'integrations_read_burst', windowSeconds: 300, maxHits: 60 }])
+  if (limited) return limited
 
   const connectionId = url.searchParams.get('connection_id')
   const campaignId = url.searchParams.get('campaign_id')
@@ -2257,6 +2297,8 @@ async function runGaqlQuery(
 async function handleListCampaignInsights(req: Request, url: URL) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [{ bucket: 'integrations_read_burst', windowSeconds: 300, maxHits: 60 }])
+  if (limited) return limited
 
   const connectionId = url.searchParams.get('connection_id')
   const campaignId = url.searchParams.get('campaign_id')
@@ -2650,6 +2692,8 @@ async function handleFormsWebhook(req: Request) {
 async function handleListGoogleAdsAccounts(req: Request, url: URL) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [{ bucket: 'integrations_read_burst', windowSeconds: 300, maxHits: 60 }])
+  if (limited) return limited
 
   const connectionId = url.searchParams.get('connection_id')
   if (!connectionId) return jsonResponse({ error: 'connection_id é obrigatório' }, 400)
@@ -2730,6 +2774,8 @@ async function handleSelectAccount(req: Request) {
 async function handleListAgencyAccounts(req: Request, url: URL) {
   const auth = await requireAdminOrGestor(req)
   if (auth instanceof Response) return auth
+  const limited = await enforceRateLimit(auth.userId, [{ bucket: 'integrations_read_burst', windowSeconds: 300, maxHits: 60 }])
+  if (limited) return limited
 
   const provider = url.searchParams.get('provider')
   if (provider !== 'google_ads' && provider !== 'meta_ads') {
