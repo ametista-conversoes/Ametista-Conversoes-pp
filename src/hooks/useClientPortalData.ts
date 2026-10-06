@@ -307,6 +307,11 @@ export interface MonthlyReportRecord {
   impressions: number | null
   conversions: number | null
   health_score: number | null
+  // Fase 48.2 — leads/vendas reais do mês (form_responses + manual_leads).
+  leads: number | null
+  sales: number | null
+  cost_per_lead: number | null
+  lead_to_sale_rate: number | null
   generated_at: string
 }
 

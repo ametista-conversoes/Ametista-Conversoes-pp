@@ -2506,6 +2506,50 @@ export function useClientLeadStatusCounts(clientId: string | null) {
   })
 }
 
+/** Fase 48.2/48.6 — mesma contagem de `useClientLeadStatusCounts`, mas
+ * filtrada a um mês específico (`form_responses.submitted_at`, com
+ * fallback pra `created_at` quando nulo — mesmo critério usado em
+ * `generate_monthly_client_reports`, migration-085) — usada no bloco
+ * automático da Análise do Gestor pro mês em andamento, que ainda não
+ * tem linha fechada em `client_monthly_reports`. Não substitui a
+ * função original (usada sem filtro de data em outros lugares). */
+export function useClientLeadStatusCountsForMonth(clientId: string | null, year: number, month: number) {
+  const refMonth = `${year}-${String(month).padStart(2, '0')}-01`
+  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`
+  return useQuery({
+    queryKey: ['lead-status-counts-month', clientId, refMonth],
+    queryFn: async () => {
+      const [formResult, manualResult] = await Promise.all([
+        supabase
+          .from('form_responses')
+          .select('status, submitted_at, created_at')
+          .eq('client_id', clientId as string),
+        supabase
+          .from('manual_leads')
+          .select('status, created_at')
+          .eq('client_id', clientId as string)
+          .gte('created_at', refMonth)
+          .lt('created_at', nextMonth),
+      ])
+      if (formResult.error) throw formResult.error
+      if (manualResult.error) throw manualResult.error
+      const formRows = (formResult.data as { status: LeadStatus; submitted_at: string | null; created_at: string }[]).filter(
+        (r) => {
+          const ref = r.submitted_at ?? r.created_at
+          return ref >= refMonth && ref < nextMonth
+        },
+      )
+      const manualRows = manualResult.data as { status: LeadStatus }[]
+      const allClassified = [...formRows, ...manualRows]
+      const leads = allClassified.length
+      const vendas = allClassified.filter((r) => r.status === 'venda').length
+      const parados_em_novo = allClassified.filter((r) => r.status === 'novo').length
+      return { leads, vendas, parados_em_novo, leadToSaleRate: leads > 0 ? (vendas / leads) * 100 : null }
+    },
+    enabled: !!clientId,
+  })
+}
+
 export interface ClientAdConversions {
   /** Soma de `conversions` (pixel/tag do próprio Google/Meta Ads) dos
    * últimos 30 dias, de TODAS as campanhas vinculadas a QUALQUER
