@@ -6,6 +6,10 @@ export interface ChannelBreakdown {
   channel: string
   investimento: number
   receita: number
+  // Fase 48.3 — só usados na tabela por canal do relatório em PDF
+  // (mês selecionado); o gráfico de barras em si não os lê.
+  conversoes?: number
+  cpa?: number | null
 }
 
 interface SpendRevenueBarChartProps {

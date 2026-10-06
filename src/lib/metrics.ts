@@ -75,6 +75,8 @@ export function groupByChannelForMonth(
     channel,
     investimento: spend,
     receita: totalRevenue != null && totalConversions > 0 ? totalRevenue * (conversions / totalConversions) : 0,
+    conversoes: conversions,
+    cpa: conversions > 0 ? spend / conversions : null,
   }))
 }
 

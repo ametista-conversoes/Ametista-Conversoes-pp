@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   Activity,
   CheckCircle2,
+  Coins,
   DollarSign,
   Download,
   Eye,
@@ -9,8 +10,10 @@ import {
   MousePointerClick,
   Percent,
   Receipt,
+  ShoppingCart,
   Target,
   TrendingUp,
+  Users,
   Wallet,
 } from 'lucide-react'
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrendChart'
@@ -25,7 +28,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/contexts/AuthContext'
-import { useClient, useMonthlyReport, usePerformanceSnapshots, useProjects, useSmartGoals } from '@/hooks/useClientPortalData'
+import {
+  useClient,
+  useLeadStatusCountsForMonth,
+  useMonthlyReport,
+  usePerformanceSnapshots,
+  useProjects,
+  useSmartGoals,
+} from '@/hooks/useClientPortalData'
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
 import { kpiDescriptions } from '@/lib/kpi-descriptions'
 import {
@@ -33,6 +43,7 @@ import {
   aggregateSnapshotKpisForMonth,
   buildMetricSeries,
   buildTrendSeries,
+  computeRateMetrics,
   computeRevenueFromLeads,
   computeRoas,
   groupByChannel,
@@ -40,6 +51,11 @@ import {
   type MetricKey,
 } from '@/lib/metrics'
 import { generateMonthlyReportPdf, type MonthlyReportPdfData } from '@/lib/pdf-report'
+
+function lastDayOfMonthIso(year: number, month: number): string {
+  const d = new Date(year, month, 0)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const now = new Date()
 
@@ -63,6 +79,11 @@ export default function Reports() {
   // foi clicado.
   const [selectedMetric, setSelectedMetric] = useState<{ key: MetricKey; scope: 'all' | 'month' } | null>(null)
   const { data: monthlyReport, isLoading: loadingMonthlyReport } = useMonthlyReport(selectedYear, selectedMonth)
+  const prevMonthDate = new Date(selectedYear, selectedMonth - 2, 1)
+  const prevYear = prevMonthDate.getFullYear()
+  const prevMonth = prevMonthDate.getMonth() + 1
+  const { data: previousMonthlyReport } = useMonthlyReport(prevYear, prevMonth)
+  const { data: liveLeadCounts } = useLeadStatusCountsForMonth(selectedYear, selectedMonth)
 
   if (!clientId) {
     return <UnlinkedClientNotice page="Relatórios" />
@@ -98,6 +119,7 @@ export default function Reports() {
   }
 
   const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1
+  const isPartialMonth = isCurrentMonth && !monthlyReport
   let monthlyData: MonthlyReportPdfData | null = null
   if (monthlyReport) {
     monthlyData = {
@@ -107,14 +129,25 @@ export default function Reports() {
       roas: monthlyReport.roas,
       cpa: monthlyReport.cpa,
       ctr: monthlyReport.ctr,
+      cpc: computeRateMetrics(
+        monthlyReport.spend ?? 0,
+        monthlyReport.clicks ?? 0,
+        monthlyReport.impressions ?? 0,
+        monthlyReport.conversions ?? 0,
+      ).cpc,
       clicks: monthlyReport.clicks,
       impressions: monthlyReport.impressions,
       conversions: monthlyReport.conversions,
       health_score: monthlyReport.health_score,
+      leads: monthlyReport.leads,
+      sales: monthlyReport.sales,
+      costPerLead: monthlyReport.cost_per_lead,
+      leadToSaleRate: monthlyReport.lead_to_sale_rate,
     }
   } else if (isCurrentMonth) {
     const liveKpis = aggregateSnapshotKpisForMonth(snapshotList, selectedYear, selectedMonth)
     const liveRevenue = computeRevenueFromLeads(liveKpis.conversions, client?.leads_to_close ?? null, client?.average_ticket ?? null)
+    const liveLeads = liveLeadCounts?.leads ?? null
     monthlyData = {
       spend: liveKpis.spend,
       revenue: liveRevenue,
@@ -122,12 +155,46 @@ export default function Reports() {
       roas: liveRevenue != null ? computeRoas(liveRevenue, liveKpis.spend) : null,
       cpa: liveKpis.cpa,
       ctr: liveKpis.ctr,
+      cpc: liveKpis.cpc,
       clicks: liveKpis.clicks,
       impressions: liveKpis.impressions,
       conversions: liveKpis.conversions,
       health_score: client?.health_score ?? null,
+      leads: liveLeads,
+      sales: liveLeadCounts?.vendas ?? null,
+      costPerLead: liveLeads && liveLeads > 0 ? liveKpis.spend / liveLeads : null,
+      leadToSaleRate: liveLeadCounts?.leadToSaleRate ?? null,
     }
   }
+  const previousPeriodData: MonthlyReportPdfData | undefined = previousMonthlyReport
+    ? {
+        spend: previousMonthlyReport.spend,
+        revenue: previousMonthlyReport.revenue,
+        monthlyFee: null,
+        roas: previousMonthlyReport.roas,
+        cpa: previousMonthlyReport.cpa,
+        ctr: previousMonthlyReport.ctr,
+        cpc: computeRateMetrics(
+          previousMonthlyReport.spend ?? 0,
+          previousMonthlyReport.clicks ?? 0,
+          previousMonthlyReport.impressions ?? 0,
+          previousMonthlyReport.conversions ?? 0,
+        ).cpc,
+        clicks: previousMonthlyReport.clicks,
+        impressions: previousMonthlyReport.impressions,
+        conversions: previousMonthlyReport.conversions,
+        health_score: previousMonthlyReport.health_score,
+        leads: previousMonthlyReport.leads,
+        sales: previousMonthlyReport.sales,
+        costPerLead: previousMonthlyReport.cost_per_lead,
+        leadToSaleRate: previousMonthlyReport.lead_to_sale_rate,
+      }
+    : undefined
+  // Cliente sem nenhum projeto 100% "Vendas" (ou sem projeto nenhum) —
+  // mostra as métricas de funil de lead; projetos todos "Vendas" (conversão
+  // direta, sem etapa de qualificação) escondem Leads/Custo por
+  // lead/Vendas/Taxa lead→venda, tanto na tela quanto no PDF.
+  const hasLeadMetrics = projectList.some((p) => p.status !== 'cancelled' && (p.conversion_type ?? 'leads') === 'leads')
   // Mesma fórmula do FinancialSummaryCard (aba Financeiro) — Lucro
   // desconta a mensalidade da agência, não só o investimento em mídia.
   const monthlyTotalCost = (monthlyData?.spend ?? 0) + (monthlyData?.monthlyFee ?? 0)
@@ -142,16 +209,24 @@ export default function Reports() {
   const monthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`
   const monthSnapshots = snapshotList.filter((s) => s.snapshot_date.startsWith(monthPrefix))
   const monthTrendData = buildTrendSeries(monthSnapshots)
+  const periodStartIso = `${monthPrefix}-01`
+  const periodEndIso = isPartialMonth
+    ? monthSnapshots.reduce<string | null>((latest, s) => (!latest || s.snapshot_date > latest ? s.snapshot_date : latest), null) ??
+      new Date().toISOString().slice(0, 10)
+    : lastDayOfMonthIso(selectedYear, selectedMonth)
 
   // Config dos cards clicáveis da aba "Histórico Mensal" — "Gasto
-  // Total" e "Lucro" ficam de fora (dependem da mensalidade, um valor
-  // só do mês inteiro, sem jeito natural de virar uma série diária).
+  // Total" e "Resultado estimado" ficam de fora (dependem da
+  // mensalidade, um valor só do mês inteiro, sem jeito natural de virar
+  // uma série diária); Leads/Custo por lead/Vendas/Taxa lead→venda
+  // também ficam de fora (sem série diária calculada, ver metrics.ts).
   const monthlyMetricConfigs: Partial<Record<MetricKey, MetricDetailConfig>> = monthlyData
     ? {
         spend: { label: 'Investimento', currentValue: monthlyData.spend, formatValue: formatCurrency },
-        revenue: { label: 'Receita', currentValue: monthlyData.revenue, formatValue: formatCurrency },
+        revenue: { label: 'Receita estimada', currentValue: monthlyData.revenue, formatValue: formatCurrency },
         roas: { label: 'ROAS', currentValue: monthlyData.roas, formatValue: formatMultiplier },
         cpa: { label: 'CPA', currentValue: monthlyData.cpa, formatValue: formatCurrency },
+        cpc: { label: 'CPC', currentValue: monthlyData.cpc, formatValue: formatCurrency },
         ctr: { label: 'CTR médio', currentValue: monthlyData.ctr, formatValue: formatPercent },
         conversions: { label: 'Conversões', currentValue: monthlyData.conversions, formatValue: formatNumber },
       }
@@ -329,6 +404,13 @@ export default function Reports() {
                     monthChannelData,
                     monthTrendData,
                     goals ?? [],
+                    {
+                      periodStart: periodStartIso,
+                      periodEnd: periodEndIso,
+                      isPartial: isPartialMonth,
+                      showLeadMetrics: hasLeadMetrics,
+                      previousPeriod: previousPeriodData,
+                    },
                   )
                 }
               >
@@ -344,9 +426,9 @@ export default function Reports() {
             <p className="text-sm text-muted-foreground">Sem dados para este mês.</p>
           ) : (
             <>
-              {isCurrentMonth && !monthlyReport && (
+              {isPartialMonth && (
                 <p className="text-xs text-muted-foreground">
-                  Mês em andamento — fechamento oficial no dia 1º do próximo mês.
+                  Mês em andamento (parcial) — fechamento oficial no dia 1º do próximo mês.
                 </p>
               )}
               <div className="content-grid-container">
@@ -365,13 +447,18 @@ export default function Reports() {
                     description={kpiDescriptions.gastoTotal}
                   />
                   <KpiCard
-                    label="Receita"
+                    label="Receita estimada"
                     value={formatCurrency(monthlyData.revenue)}
                     icon={TrendingUp}
                     description={kpiDescriptions.receita}
                     onClick={() => setSelectedMetric({ key: 'revenue', scope: 'month' })}
                   />
-                  <KpiCard label="Lucro" value={formatCurrency(monthlyProfit)} icon={Wallet} description={kpiDescriptions.lucro} />
+                  <KpiCard
+                    label="Resultado estimado"
+                    value={formatCurrency(monthlyProfit)}
+                    icon={Wallet}
+                    description={kpiDescriptions.lucro}
+                  />
                   <KpiCard
                     label="ROAS"
                     value={formatMultiplier(monthlyData.roas)}
@@ -387,6 +474,13 @@ export default function Reports() {
                     onClick={() => setSelectedMetric({ key: 'cpa', scope: 'month' })}
                   />
                   <KpiCard
+                    label="CPC"
+                    value={formatCurrency(monthlyData.cpc)}
+                    icon={Target}
+                    description={kpiDescriptions.cpc}
+                    onClick={() => setSelectedMetric({ key: 'cpc', scope: 'month' })}
+                  />
+                  <KpiCard
                     label="CTR médio"
                     value={formatPercent(monthlyData.ctr)}
                     icon={MousePointerClick}
@@ -400,8 +494,36 @@ export default function Reports() {
                     description={kpiDescriptions.conversoes}
                     onClick={() => setSelectedMetric({ key: 'conversions', scope: 'month' })}
                   />
+                  {hasLeadMetrics && (
+                    <>
+                      <KpiCard label="Leads" value={formatNumber(monthlyData.leads)} icon={Users} description={kpiDescriptions.leads} />
+                      <KpiCard
+                        label="Custo por lead"
+                        value={formatCurrency(monthlyData.costPerLead)}
+                        icon={Coins}
+                        description={kpiDescriptions.custoPorLead}
+                      />
+                      <KpiCard
+                        label="Vendas"
+                        value={formatNumber(monthlyData.sales)}
+                        icon={ShoppingCart}
+                        description={kpiDescriptions.vendas}
+                      />
+                      <KpiCard
+                        label="Taxa lead → venda"
+                        value={formatPercent(monthlyData.leadToSaleRate)}
+                        icon={Percent}
+                        description={kpiDescriptions.taxaLeadVenda}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground/70">
+                Receita estimada e Resultado estimado vêm de Leads reais × Ticket Médio informado pelo cliente (ou direto de
+                Conversões × Ticket Médio, quando o projeto é do tipo "Vendas") — não são valor de venda confirmado, a menos
+                que o projeto rastreie valor de conversão real.
+              </p>
 
               <Card className="min-w-0 overflow-hidden rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
                 <CardHeader className="p-0">

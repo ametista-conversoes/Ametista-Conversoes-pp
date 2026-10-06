@@ -9,7 +9,7 @@ export const kpiDescriptions = {
     'Cálculo: soma do gasto sincronizado dos últimos 30 dias. Sem integração conectada, aparece "—".',
 
   receita:
-    'Receita = Faturamento estimado a partir dos Leads reais\n\n' +
+    'Receita estimada = Faturamento estimado a partir dos Leads reais\n\n' +
     'Nenhuma plataforma de anúncio reporta faturamento, então a Receita é calculada em 2 passos: Vendas = Leads ÷ "Leads p/ fechar 1 venda", depois Receita = Vendas × "Ticket médio" — as duas premissas são editadas na Central de Informações do Cliente. Sem elas configuradas, aparece "—".\n\n' +
     'Cálculo: (Conversões dos últimos 30 dias ÷ Leads p/ fechar) × Ticket médio.',
 
@@ -19,7 +19,7 @@ export const kpiDescriptions = {
     'Cálculo: Investimento + Mensalidade, no mesmo período.',
 
   lucro:
-    'Lucro = Receita menos Gasto Total\n\n' +
+    'Resultado estimado = Receita estimada menos Gasto Total\n\n' +
     'Quanto sobrou depois de descontar tanto o investimento em mídia quanto a mensalidade da agência da Receita estimada a partir dos Leads — mesma fórmula do "Resumo financeiro" (aba Financeiro). Sem a Receita configurada (premissas na Central de Informações do Cliente), aparece "—".\n\n' +
     'Cálculo: Receita − (Investimento + Mensalidade), no mesmo período.',
 
@@ -67,6 +67,26 @@ export const kpiDescriptions = {
     'Taxa de Conversão = Percentual de cliques que viraram resultado\n\n' +
     'De cada clique recebido, quantos viraram uma conversão (venda, lead, cadastro) reportada pela plataforma de anúncios.\n\n' +
     'Cálculo: conversões sincronizadas ÷ cliques, no mesmo período.',
+
+  leads:
+    'Leads = Volume de contatos recebidos no período\n\n' +
+    'Soma das respostas de formulário sincronizadas (aba Leads) com os leads registrados manualmente, no mês selecionado — diferente da contagem "bruta" da aba Leads, que soma o histórico inteiro. Só aparece pra clientes com pelo menos um projeto do tipo "Leads".\n\n' +
+    'Cálculo: respostas de formulário + leads manuais, dentro do mês selecionado.',
+
+  custoPorLead:
+    'Custo por Lead (CPL) = Quanto custou, em média, cada lead recebido\n\n' +
+    'Quanto menor, mais eficiente a captação. Diferente do CPA, que mede o custo por conversão rastreada pela plataforma de anúncio (venda ou lead já qualificado).\n\n' +
+    'Cálculo: Investimento em mídia do mês ÷ Leads do mês.',
+
+  vendas:
+    'Vendas = Leads que fecharam negócio no período\n\n' +
+    'Quantos dos leads recebidos no mês (formulário + manuais) já estão marcados com status "Venda".\n\n' +
+    'Cálculo: contagem de leads do mês com status "Venda".',
+
+  taxaLeadVenda:
+    'Taxa Lead → Venda = Percentual de leads que viraram venda\n\n' +
+    'De cada lead recebido no mês, quantos já fecharam negócio — indicador de saúde do atendimento/funil comercial, não da campanha em si.\n\n' +
+    'Cálculo: Vendas do mês ÷ Leads do mês.',
 
   // ---------- Portal Gestor (Dashboard Executivo) ----------
   mrrTotal:
