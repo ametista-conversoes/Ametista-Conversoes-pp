@@ -929,7 +929,17 @@ function extractGoogleAdsErrorMessage(body: unknown): string {
  * MCC nenhuma) quanto todas as contas-cliente reais por baixo dela (se
  * for uma gerenciadora), incluindo o nome da própria raiz (útil pra
  * identificação em `roots`). Usada tanto na descoberta automática
- * (`handleCallback`) quanto na escolha manual (`/accounts`, `/agency-accounts`). */
+ * (`handleCallback`) quanto na escolha manual (`/accounts`, `/agency-accounts`).
+ *
+ * `roots` só inclui raízes que são de fato gerenciadoras (`manager:
+ * true`) — achado ao vivo (05/10): `listAccessibleCustomers` devolve
+ * TODAS as contas que o login acessa diretamente, não só MCCs; uma
+ * conta de Google Ads avulsa (sem MCC nenhum por trás) também aparece
+ * como "raiz" ali, e antes entrava em `roots` do mesmo jeito — fazendo
+ * a tela "MCCs identificados" (Configurações > Agência) mostrar uma
+ * conta normal como se fosse uma conta administradora. Raiz com erro na
+ * consulta (abaixo) continua entrando mesmo sem saber se é gerenciadora
+ * — não dá pra saber, e o diagnóstico em si já é útil. */
 async function discoverGoogleAdsClientAccounts(accessToken: string): Promise<GoogleAdsDiscoveryResult> {
   const rootsRes = await fetch(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers:listAccessibleCustomers`, {
     headers: {
@@ -992,7 +1002,7 @@ async function discoverGoogleAdsClientAccounts(accessToken: string): Promise<Goo
         })
       }
     }
-    roots.push({ id: rootId, name: rootName, manager: rootIsManager, testAccount: rootIsTest })
+    if (rootIsManager) roots.push({ id: rootId, name: rootName, manager: rootIsManager, testAccount: rootIsTest })
   }
   return { accounts: Array.from(found.values()), roots }
 }
