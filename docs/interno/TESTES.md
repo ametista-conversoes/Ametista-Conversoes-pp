@@ -286,3 +286,9 @@
 - [ ] Testar o plano Dominação de ponta a ponta (análise semanal + mensal estratégica, com o seletor de tipo) — só testei Escala e Validação ao vivo nesta fase; não existe nenhum cliente real com plano "Dominação" cadastrado ainda pra testar sem precisar trocar o plano de um cliente de teste.
 - [X] Fase 48.9 confirmada ao vivo: bloco "Análises do Gestor pendentes" em Atividades mostra os 4 clientes reais sem análise publicada (Loja Aurora, calldaviaraujo, celestialy essence, jazztazz), com os dias de atraso certos.
 - [ ] Aguardar o cron de 1 em 1 minuto (já confirmado que está rodando e autenticando certo) e confirmar que admin/gestor recebem de fato a notificação push "Análise do gestor vencida" pra algum dos 4 clientes pendentes.
+
+## 42. Fase 48.11 (opcional) — exclusividade por plano em Workflows do Cliente
+- [ ] Em Workflows → "Workflows do Cliente" → "Novo modelo" (ou editar um existente): confirmar que cada etapa agora mostra os 3 checkboxes de plano (Validação/Escala/Dominação), todos marcados por padrão. Desmarcar 1 ou 2 e salvar.
+- [ ] No card do modelo salvo, confirmar que a etapa exclusiva mostra a badge cinza "Exclusivo: <plano(s)>" ao lado do título — e que uma etapa com os 3 planos marcados NÃO mostra badge nenhuma (comportamento "vale pra todos", igual já era antes).
+- [ ] Aplicar um modelo com etapas mistas (algumas universais, alguma exclusiva de 1 plano) a um cliente real de cada plano que você tiver (Validação/Escala) e confirmar em `/tasks` do Portal Cliente que só as etapas certas viraram tarefa — testei isso só direto no banco (sem cliente real "Dominação" cadastrado ainda pra testar via UI de ponta a ponta).
+- [ ] Modelos antigos (criados antes desta fase) continuam aplicando todas as etapas normalmente (backfill automático marcou todos os 3 planos neles).

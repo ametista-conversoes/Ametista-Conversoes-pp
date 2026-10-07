@@ -2066,6 +2066,11 @@ export interface WorkflowTemplateStep {
    * (`apply_workflow`, tarefas do Kanban) ignora esse campo — a UI de
    * edição dele nem mostra a opção. */
   recurrence?: RecurrenceInterval | null
+  /** Fase 48.11 — mesmo padrão do plan_scope de ActivityTemplateItem,
+   * só que usado de verdade só pelo Workflow do Cliente
+   * (`apply_client_workflow`); o Workflow Operacional não lê este
+   * campo. Ausente/vazio é tratado como "todos os planos". */
+  plan_scope?: ActivityPlanScope[]
 }
 
 export interface WorkflowTemplateRecord {
