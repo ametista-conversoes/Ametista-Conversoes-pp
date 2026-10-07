@@ -52,3 +52,45 @@ export async function sendPersuasiveCopyMessage({ clientId, connectionId, messag
   if (!res.ok) throw new Error(body.error ?? 'Não foi possível gerar sugestões.')
   return body.reply as string
 }
+
+/** Fase 48.10 — formato solto de propósito: as chaves presentes variam
+ * por plano/tipo (ver `extraFieldKeysFor` na Edge Function), e o
+ * front-end só aplica via form.setValue as chaves que fazem sentido
+ * pro formulário aberto no momento, ignorando o resto. */
+export interface ManagerAnalysisDraft {
+  resumo?: string
+  status_geral?: string
+  diagnostico?: string
+  otimizacoes_realizadas?: string
+  proximos_passos?: Array<{ titulo?: string; data?: string | null }>
+  pendencias_cliente_texto?: string
+  [extraField: string]: unknown
+}
+
+interface SuggestManagerAnalysisDraftParams {
+  clientId: string
+  plan: string
+  tipo: string
+  periodStart: string
+  periodEnd: string
+}
+
+/** "Sugerir rascunho" em ManagerAnalysisFormDialog.tsx — rota dedicada
+ * (não /chat), resposta de 1 tiro sem histórico persistido. A Cassie só
+ * sugere texto; quem decide salvar (e o quê) continua sendo o gestor. */
+export async function suggestManagerAnalysisDraft(params: SuggestManagerAnalysisDraftParams): Promise<ManagerAnalysisDraft> {
+  const res = await fetchFriendly(`${FUNCTIONS_BASE}/suggest-analysis-draft`, {
+    method: 'POST',
+    headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: params.clientId,
+      plan: params.plan,
+      tipo: params.tipo,
+      period_start: params.periodStart,
+      period_end: params.periodEnd,
+    }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Não foi possível gerar a sugestão.')
+  return body.draft as ManagerAnalysisDraft
+}

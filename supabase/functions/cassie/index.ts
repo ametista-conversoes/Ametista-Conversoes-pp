@@ -41,6 +41,15 @@
 //   conectados do cliente (e a conversa fica separada por essa mesma
 //   combinação de cliente+formulário). O botão "Gerar sugestões com
 //   IA" do front-end manda uma message fixa por essa mesma rota.
+//
+//   POST .../CASSIE/suggest-analysis-draft   { client_id: string, plan: string, tipo: string, period_start: string, period_end: string }
+//   Fase 48.10 ("Sugerir rascunho" na Análise do Gestor) — só
+//   admin/gestor; rota dedicada, de 1 tiro, sem histórico persistido
+//   (reaproveita buildClientContext, o mesmo contexto do /chat). Devolve
+//   { draft: {...} } com as chaves de texto do formulário de Análise do
+//   Gestor (resumo/diagnóstico/etc + os campos específicos do
+//   plano/tipo pedido) pro front-end preencher via form.setValue — a
+//   Cassie nunca salva nem publica nada aqui, só sugere.
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -626,11 +635,136 @@ async function handlePersuasiveCopy(req: Request) {
   return jsonResponse({ reply: replyText })
 }
 
+// Fase 48.10 — quais chaves de extra_fields pedir pra Cassie sugerir,
+// por plano/tipo (mesma divisão de ManagerAnalysisFormDialog.tsx,
+// buildExtraFields). "resultado_teste" fica de fora de propósito: existe
+// na coluna extra_fields mas não tem campo visível no formulário hoje
+// (bug pré-existente, fora do escopo desta fase) — não faz sentido a
+// Cassie sugerir um valor que o gestor nunca vê nem revisa.
+function extraFieldKeysFor(plan: string, tipo: string): string[] {
+  if (plan === 'escala') return ['meta_vs_google', 'testes_ab_quinzena']
+  if (plan === 'dominacao' && tipo === 'periodica') return ['alertas']
+  if (plan === 'dominacao' && tipo === 'estrategica_mensal') return ['concorrencia', 'parcela_impressoes_perdida', 'cenario_escala', 'riscos']
+  return ['teste_do_mes', 'recomendacao'] // validação
+}
+
+const EXTRA_FIELD_HINTS: Record<string, string> = {
+  teste_do_mes: 'o que foi testado no mês e qual variação/resultado venceu',
+  recomendacao: 'continuar validando ou já está pronto pra escalar, com justificativa breve',
+  meta_vs_google: 'divisão da verba entre Meta e Google, CPA por canal, recomendação de redistribuição',
+  testes_ab_quinzena: 'testes A/B rodados na quinzena e o que aprenderam com eles',
+  alertas: 'anúncios com fadiga ou o que mudou que precisa de atenção esta semana',
+  concorrencia: 'o que mudou nos concorrentes no período, com base no contexto disponível',
+  parcela_impressoes_perdida: 'impressão perdida por orçamento/classificação, se perceptível pelo contexto',
+  cenario_escala: 'quanto investir a mais e o resultado esperado',
+  riscos: 'riscos identificados pro próximo período',
+}
+
+/** Fase 48.10 — "Sugerir rascunho" na Análise do Gestor. Pede pra
+ * OpenAI devolver um objeto JSON com as chaves de texto do formulário
+ * (ver ManagerAnalysisFormDialog.tsx), a partir do mesmo contexto que
+ * o /chat já usa — nunca inventa número (o bloco de números do
+ * formulário já é 100% automático, calculado no front, não vem daqui).
+ * Resposta de 1 tiro, sem histórico persistido — o gestor sempre revisa
+ * e decide salvar (rascunho) ou descartar antes de qualquer gravação. */
+async function handleSuggestAnalysisDraft(req: Request) {
+  const auth = await requireCassieCaller(req)
+  if (auth instanceof Response) return auth
+  if (auth.role !== 'admin' && auth.role !== 'gestor') {
+    return jsonResponse({ error: 'Só admin/gestor pode pedir sugestão de rascunho.' }, 403)
+  }
+  const limited = await enforceRateLimit(auth.userId, [
+    { bucket: 'cassie_analysis_draft_burst', windowSeconds: 300, maxHits: 5 },
+    { bucket: 'cassie_analysis_draft_daily', windowSeconds: 86400, maxHits: 30 },
+  ])
+  if (limited) return limited
+
+  let body: { client_id?: string; plan?: string; tipo?: string; period_start?: string; period_end?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return jsonResponse({ error: 'Corpo inválido' }, 400)
+  }
+  if (!body.client_id) return jsonResponse({ error: 'client_id é obrigatório' }, 400)
+  if (!body.period_start || !body.period_end) return jsonResponse({ error: 'period_start e period_end são obrigatórios' }, 400)
+  const plan = body.plan === 'escala' || body.plan === 'dominacao' ? body.plan : 'validacao'
+  const tipo = body.tipo === 'estrategica_mensal' ? 'estrategica_mensal' : 'periodica'
+
+  const supabase = getServiceClient()
+  const { data: clientExists } = await supabase.from('clients').select('id').eq('id', body.client_id).maybeSingle()
+  if (!clientExists) return jsonResponse({ error: 'Cliente não encontrado' }, 404)
+
+  const openaiKey = Deno.env.get('Openai_api_key')
+  if (!openaiKey) {
+    return jsonResponse({ error: 'A chave da OpenAI ainda não foi configurada nesta função (falta o segredo Openai_api_key).' }, 400)
+  }
+
+  const client = await fetchClient(supabase, body.client_id)
+  const contextText = await buildClientContext(supabase, client, body.client_id)
+
+  const includeStatusGeral = !(plan === 'dominacao' && tipo === 'periodica')
+  const extraKeys = extraFieldKeysFor(plan, tipo)
+
+  const keyDescriptions = [
+    'resumo (string, até 3 linhas, como foi o período)',
+    includeStatusGeral ? 'status_geral (um de: "no_alvo", "atencao", "fora_do_alvo")' : null,
+    'diagnostico (string, por que os números ficaram assim, em que etapa houve queda ou avanço)',
+    'otimizacoes_realizadas (string, lista textual do que foi feito no período, com base nos projetos/tarefas do contexto)',
+    'proximos_passos (array de até 3 objetos {"titulo": string, "data": "AAAA-MM-DD" ou null})',
+    'pendencias_cliente_texto (string, o que falta do lado do cliente, além das tarefas atrasadas já listadas no contexto)',
+    ...extraKeys.map((k) => `${k} (string — ${EXTRA_FIELD_HINTS[k]})`),
+  ]
+    .filter((line): line is string => line !== null)
+    .map((line) => `- ${line}`)
+    .join('\n')
+
+  const instructions = `Você é a Cassie, assistente de IA da Ametista Conversões, ajudando um gestor de tráfego a rascunhar a "Análise do Gestor" periódica de um cliente — um texto curto e estruturado que interpreta os números do período pra manter o cliente informado.
+Use só os dados do contexto abaixo — não invente números nem fatos que não estejam lá; quando não tiver informação suficiente pra algum campo, escreva algo genérico mas honesto (ex: "sem dados suficientes pra avaliar isso neste período") em vez de inventar ou deixar vazio.
+Responda em português do Brasil, direto e profissional, sem floreio.
+Responda SÓ com um objeto JSON válido (sem markdown, sem texto antes ou depois), com exatamente estas chaves:
+${keyDescriptions}
+
+--- Dados do cliente ---
+${contextText}`
+
+  const openaiRes = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${openaiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      instructions,
+      input: [{ role: 'user', content: 'Gere o rascunho agora, seguindo exatamente o formato JSON pedido.' }],
+      text: { format: { type: 'json_object' } },
+    }),
+  })
+  const openaiBody = await openaiRes.json()
+  if (!openaiRes.ok) {
+    return openaiErrorResponse('handleSuggestAnalysisDraft', openaiBody)
+  }
+
+  const replyText = extractReplyText(openaiBody)
+  if (!replyText) return jsonResponse({ error: 'A Cassie não conseguiu gerar uma sugestão.' }, 502)
+
+  let draft: Record<string, unknown>
+  try {
+    draft = JSON.parse(replyText)
+  } catch {
+    await logServerError('cassie', 'handleSuggestAnalysisDraft: JSON inválido da OpenAI', { replyText })
+    return jsonResponse({ error: 'A Cassie gerou uma resposta em formato inesperado. Tente de novo.' }, 502)
+  }
+
+  return jsonResponse({ draft })
+}
+
 async function routeRequest(req: Request, url: URL): Promise<Response> {
   try {
     if (req.method === 'POST' && url.pathname.endsWith('/chat')) return await handleChat(req)
     if (req.method === 'POST' && url.pathname.endsWith('/persuasive-copy')) return await handlePersuasiveCopy(req)
-    return jsonResponse({ error: 'Rota não encontrada. Use /chat ou /persuasive-copy.' }, 404)
+    if (req.method === 'POST' && url.pathname.endsWith('/suggest-analysis-draft')) return await handleSuggestAnalysisDraft(req)
+    return jsonResponse({ error: 'Rota não encontrada. Use /chat, /persuasive-copy ou /suggest-analysis-draft.' }, 404)
   } catch (err) {
     console.error('[cassie] erro inesperado:', err)
     await logServerError('cassie', 'erro inesperado', err)

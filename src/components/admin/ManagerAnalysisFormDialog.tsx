@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -25,6 +25,7 @@ import {
   usePublishManagerAnalysis,
   useUpdateManagerAnalysis,
 } from '@/hooks/useManagerPortalData'
+import { type ManagerAnalysisDraft, suggestManagerAnalysisDraft } from '@/lib/cassie'
 import { formatCurrency, formatDate, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
 import {
   type AnalysisPlan,
@@ -126,7 +127,14 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
 
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: EMPTY_VALUES })
   const tipo = form.watch('tipo')
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: 'proximos_passos' })
+  const { fields, append, remove, replace } = useFieldArray({ control: form.control, name: 'proximos_passos' })
+  const showStatusGeral = !(plan === 'dominacao' && tipo === 'periodica')
+  const extraFieldKeysForPlan = useMemo<Array<keyof FormValues>>(() => {
+    if (plan === 'escala') return ['meta_vs_google', 'testes_ab_quinzena']
+    if (plan === 'dominacao' && tipo === 'periodica') return ['alertas']
+    if (plan === 'dominacao' && tipo === 'estrategica_mensal') return ['concorrencia', 'parcela_impressoes_perdida', 'cenario_escala', 'riscos']
+    return ['teste_do_mes', 'recomendacao']
+  }, [plan, tipo])
 
   const period = analysis
     ? { periodStart: analysis.period_start, periodEnd: analysis.period_end }
@@ -147,6 +155,7 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
   const createOptimizationLog = useCreateOptimizationLogEntry()
   const [newOptimization, setNewOptimization] = useState('')
   const [saving, setSaving] = useState<'draft' | 'publish' | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
 
   const numbers = useMemo(() => {
     const kpis = aggregateSnapshotKpisForRange(snapshots ?? [], period.periodStart, period.periodEnd)
@@ -278,6 +287,48 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
     setNewOptimization('')
   }
 
+  /** Fase 48.10 — só preenche campos via setValue, nunca salva nem
+   * publica sozinho; o gestor sempre revisa e decide clicar "Salvar
+   * rascunho"/"Publicar" depois. Só aplica as chaves relevantes pro
+   * plano/tipo aberto no momento (mesma divisão de buildExtraFields),
+   * ignorando qualquer outra chave que a Cassie tenha devolvido. */
+  async function handleSuggestDraft() {
+    setSuggesting(true)
+    try {
+      const draft: ManagerAnalysisDraft = await suggestManagerAnalysisDraft({
+        clientId: client.id,
+        plan,
+        tipo,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+      })
+      if (typeof draft.resumo === 'string') form.setValue('resumo', draft.resumo)
+      if (showStatusGeral && typeof draft.status_geral === 'string' && draft.status_geral in STATUS_GERAL_LABELS) {
+        form.setValue('status_geral', draft.status_geral as FormValues['status_geral'])
+      }
+      if (typeof draft.diagnostico === 'string') form.setValue('diagnostico', draft.diagnostico)
+      if (typeof draft.otimizacoes_realizadas === 'string') form.setValue('otimizacoes_realizadas', draft.otimizacoes_realizadas)
+      if (Array.isArray(draft.proximos_passos)) {
+        replace(
+          draft.proximos_passos
+            .slice(0, 3)
+            .map((p) => ({ titulo: typeof p?.titulo === 'string' ? p.titulo : '', data: typeof p?.data === 'string' ? p.data : '' }))
+            .filter((p) => p.titulo.trim().length > 0),
+        )
+      }
+      if (typeof draft.pendencias_cliente_texto === 'string') form.setValue('pendencias_cliente_texto', draft.pendencias_cliente_texto)
+      for (const key of extraFieldKeysForPlan) {
+        const value = draft[key]
+        if (typeof value === 'string') form.setValue(key, value)
+      }
+      toast.success('Rascunho sugerido pela Cassie — revise antes de salvar.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível gerar a sugestão.')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -345,6 +396,19 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
           </div>
         )}
 
+        {isDraft && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-purple-600/20 text-purple-300 hover:bg-purple-600/10"
+            disabled={suggesting}
+            onClick={handleSuggestDraft}
+          >
+            <Sparkles className="h-4 w-4" />
+            {suggesting ? 'Pensando...' : 'Sugerir rascunho com a Cassie'}
+          </Button>
+        )}
+
         <Form {...form}>
           <form className="space-y-4">
             <FormField
@@ -361,7 +425,7 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
               )}
             />
 
-            {!(plan === 'dominacao' && tipo === 'periodica') && (
+            {showStatusGeral && (
               <FormField
                 control={form.control}
                 name="status_geral"
