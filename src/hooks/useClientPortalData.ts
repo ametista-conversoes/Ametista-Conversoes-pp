@@ -359,6 +359,34 @@ export interface ManagerAnalysisRecord {
   created_at: string
 }
 
+// Fase 48.5 — Plano de 90 dias: marcos datados, só leitura do lado do
+// cliente (gestor lança na Central de Informações).
+export interface Client90DayMilestoneRecord {
+  id: string
+  start_date: string | null
+  entry_date: string
+  title: string
+  status: 'pendente' | 'em_andamento' | 'concluido' | 'atrasado'
+  note: string | null
+}
+
+export function useClient90DayMilestonesForClient() {
+  const { clientId } = useAuth()
+  return useQuery({
+    queryKey: ['client-90day-milestones', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_90day_milestones')
+        .select('id, start_date, entry_date, title, status, note')
+        .eq('client_id', clientId as string)
+        .order('entry_date', { ascending: false })
+      if (error) throw error
+      return data as Client90DayMilestoneRecord[]
+    },
+    enabled: !!clientId,
+  })
+}
+
 export function usePublishedManagerAnalysesForClient() {
   const { clientId } = useAuth()
   return useQuery({

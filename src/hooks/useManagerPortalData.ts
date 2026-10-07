@@ -1382,6 +1382,97 @@ export function useOptimizationUsageForPeriod(clientId: string | null, periodSta
   })
 }
 
+// =========================================================
+// Plano de 90 dias — marcos datados (Fase 48.5). Registro leve de
+// progresso (não o documento completo, que continua manual/externo);
+// gestor lança, cliente vê (read-only).
+// =========================================================
+
+export interface Client90DayMilestoneRecord {
+  id: string
+  client_id: string
+  start_date: string | null
+  entry_date: string
+  title: string
+  status: 'pendente' | 'em_andamento' | 'concluido' | 'atrasado'
+  note: string | null
+  created_at: string
+}
+
+const MILESTONE_90D_SELECT = 'id, client_id, start_date, entry_date, title, status, note, created_at'
+
+export function useClient90DayMilestones(clientId: string | null) {
+  return useQuery({
+    queryKey: ['client-90day-milestones', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_90day_milestones')
+        .select(MILESTONE_90D_SELECT)
+        .eq('client_id', clientId as string)
+        .order('entry_date', { ascending: false })
+      if (error) throw error
+      return data as Client90DayMilestoneRecord[]
+    },
+    enabled: !!clientId,
+  })
+}
+
+export interface NewClient90DayMilestoneInput {
+  client_id: string
+  start_date: string | null
+  entry_date: string
+  title: string
+  status: 'pendente' | 'em_andamento' | 'concluido' | 'atrasado'
+  note: string | null
+}
+
+export function useCreateClient90DayMilestone() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: NewClient90DayMilestoneInput) => {
+      const { error } = await supabase.from('client_90day_milestones').insert(input)
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['client-90day-milestones', variables.client_id] })
+    },
+    onError: () => toast.error('Não foi possível criar o marco.'),
+  })
+}
+
+export function useUpdateClient90DayMilestone() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      client_id,
+      ...input
+    }: Partial<NewClient90DayMilestoneInput> & { id: string; client_id: string }) => {
+      const { error } = await supabase.from('client_90day_milestones').update(input).eq('id', id)
+      if (error) throw error
+      return client_id
+    },
+    onSuccess: (client_id) => {
+      queryClient.invalidateQueries({ queryKey: ['client-90day-milestones', client_id] })
+    },
+    onError: () => toast.error('Não foi possível salvar o marco.'),
+  })
+}
+
+export function useDeleteClient90DayMilestone() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; client_id: string }) => {
+      const { error } = await supabase.from('client_90day_milestones').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['client-90day-milestones', variables.client_id] })
+    },
+    onError: () => toast.error('Não foi possível apagar o marco.'),
+  })
+}
+
 export interface CampaignLinkWithProject {
   id: string
   project_id: string

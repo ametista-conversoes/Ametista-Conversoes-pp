@@ -23,6 +23,7 @@ import { GoalsProgressCard } from '@/components/dashboard/GoalsProgressCard'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { MetricDetailDialog } from '@/components/dashboard/MetricDetailDialog'
 import { MonthYearPicker } from '@/components/reports/MonthYearPicker'
+import { Plano90DaysTimeline } from '@/components/reports/Plano90DaysTimeline'
 import { UnlinkedClientNotice } from '@/components/shared/UnlinkedClientNotice'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useClient,
+  useClient90DayMilestonesForClient,
   useLeadStatusCountsForMonth,
   useMonthlyReport,
   usePerformanceSnapshots,
@@ -71,6 +73,7 @@ export default function Reports() {
   const { data: projects, isLoading: loadingProjects, isError: projectsIsError } = useProjects()
   const { data: snapshots, isLoading: loadingSnapshots, isError: snapshotsIsError } = usePerformanceSnapshots()
   const { data: goals, isLoading: loadingGoals, isError: goalsIsError } = useSmartGoals()
+  const { data: milestones90d } = useClient90DayMilestonesForClient()
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   // "all" = histórico inteiro (abas Tráfego/Financeiro), "month" = só o
@@ -259,6 +262,7 @@ export default function Reports() {
           <TabsTrigger value="financial">Financeiro</TabsTrigger>
           <TabsTrigger value="channels">Distribuição &amp; Canais</TabsTrigger>
           <TabsTrigger value="monthly">Histórico Mensal</TabsTrigger>
+          <TabsTrigger value="plano90">Plano de 90 dias</TabsTrigger>
         </TabsList>
 
         <TabsContent value="traffic" className="space-y-4">
@@ -560,6 +564,21 @@ export default function Reports() {
               </div>
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="plano90" className="space-y-4">
+          <Card className="min-w-0 overflow-hidden rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
+            <CardHeader className="p-0">
+              <CardTitle className="text-base">Plano de 90 dias</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 p-0 pt-4">
+              <p className="text-xs text-muted-foreground">
+                Progresso registrado pelo seu gestor — não é o documento completo do Plano de 90 dias (esse fica na aba
+                Arquivos, quando enviado).
+              </p>
+              <Plano90DaysTimeline milestones={milestones90d ?? []} />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

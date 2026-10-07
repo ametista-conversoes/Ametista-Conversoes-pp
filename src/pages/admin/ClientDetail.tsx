@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { CatalogCard } from '@/components/admin/CatalogCard'
+import { Client90DayMilestonesCard } from '@/components/admin/Client90DayMilestonesCard'
 import { ClientAccessCard } from '@/components/admin/ClientAccessCard'
 import { ClientPerformanceMetricsCard } from '@/components/admin/ClientPerformanceMetricsCard'
 import { ClientPlatformCard } from '@/components/admin/ClientPlatformCard'
@@ -498,6 +499,8 @@ export default function ClientDetail() {
               })}
             </CardContent>
           </Card>
+
+          <Client90DayMilestonesCard clientId={client.id} />
 
           <Card className="rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
             <CardHeader className="p-0">

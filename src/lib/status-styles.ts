@@ -272,6 +272,22 @@ export const leadStatusStyles: Record<string, string> = {
   perdido: 'border-destructive/20 bg-destructive/10 text-destructive',
 }
 
+// Marcos do Plano de 90 dias (Fase 48.5) — registro leve de progresso,
+// gestor lança (Central de Informações), cliente vê (Relatórios).
+export const milestone90dStatusLabels: Record<string, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em andamento',
+  concluido: 'Concluído',
+  atrasado: 'Atrasado',
+}
+
+export const milestone90dStatusStyles: Record<string, string> = {
+  pendente: 'border-slate-500/20 bg-slate-500/10 text-slate-400',
+  em_andamento: 'border-sky-500/20 bg-sky-500/10 text-sky-400',
+  concluido: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400',
+  atrasado: 'border-destructive/20 bg-destructive/10 text-destructive',
+}
+
 // Conexões de integração (Fase 6.1-6.4) — usados no card de Ativo
 // Digital e na página "Integrações".
 export const connectionProviderLabels: Record<string, string> = {
