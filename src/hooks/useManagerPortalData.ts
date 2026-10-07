@@ -1211,6 +1211,177 @@ export function useDeleteCatalogEntry() {
   })
 }
 
+// =========================================================
+// Análise do Gestor (Fase 48.4/48.6) — texto curto e estruturado que
+// interpreta os números do período, registra otimizações e define
+// próximos passos; cadência por plano (mensal/quinzenal/semanal).
+// =========================================================
+
+export interface ManagerAnalysisRecord {
+  id: string
+  client_id: string
+  period_start: string
+  period_end: string
+  tipo: 'periodica' | 'estrategica_mensal'
+  status: 'rascunho' | 'publicada'
+  published_at: string | null
+  resumo: string | null
+  status_geral: 'no_alvo' | 'atencao' | 'fora_do_alvo' | null
+  diagnostico: string | null
+  otimizacoes_realizadas: string | null
+  creatives_used_snapshot: number | null
+  changes_used_snapshot: number | null
+  proximos_passos: Array<{ titulo: string; data: string | null }>
+  pendencias_cliente_texto: string | null
+  extra_fields: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+const MANAGER_ANALYSIS_SELECT =
+  'id, client_id, period_start, period_end, tipo, status, published_at, resumo, status_geral, diagnostico, ' +
+  'otimizacoes_realizadas, creatives_used_snapshot, changes_used_snapshot, proximos_passos, pendencias_cliente_texto, ' +
+  'extra_fields, created_at, updated_at'
+
+/** Histórico completo (rascunhos + publicadas) de um cliente — Central
+ * de Informações do Cliente, card "Análises". */
+export function useManagerAnalyses(clientId: string | null) {
+  return useQuery({
+    queryKey: ['manager-analyses', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('manager_analyses')
+        .select(MANAGER_ANALYSIS_SELECT)
+        .eq('client_id', clientId as string)
+        .order('period_start', { ascending: false })
+      if (error) throw error
+      return data as unknown as ManagerAnalysisRecord[]
+    },
+    enabled: !!clientId,
+  })
+}
+
+export interface NewManagerAnalysisInput {
+  client_id: string
+  period_start: string
+  period_end: string
+  tipo: 'periodica' | 'estrategica_mensal'
+  resumo?: string | null
+  status_geral?: 'no_alvo' | 'atencao' | 'fora_do_alvo' | null
+  diagnostico?: string | null
+  otimizacoes_realizadas?: string | null
+  creatives_used_snapshot?: number | null
+  changes_used_snapshot?: number | null
+  proximos_passos?: Array<{ titulo: string; data: string | null }>
+  pendencias_cliente_texto?: string | null
+  extra_fields?: Record<string, unknown>
+}
+
+export function useCreateManagerAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: NewManagerAnalysisInput) => {
+      const { data, error } = await supabase.from('manager_analyses').insert(input).select(MANAGER_ANALYSIS_SELECT).single()
+      if (error) throw error
+      return data as unknown as ManagerAnalysisRecord
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['manager-analyses', data.client_id] })
+    },
+    onError: () => toast.error('Não foi possível criar a análise.'),
+  })
+}
+
+export function useUpdateManagerAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, client_id, ...input }: Partial<NewManagerAnalysisInput> & { id: string; client_id: string }) => {
+      const { error } = await supabase.from('manager_analyses').update(input).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['manager-analyses', variables.client_id] })
+    },
+    onError: () => toast.error('Não foi possível salvar a análise.'),
+  })
+}
+
+/** Mutation separada de "salvar rascunho" de propósito — só ela marca
+ * `status: 'publicada'`/`published_at`, e é o único gatilho que deve
+ * disparar a notificação push ao cliente (Fase 48.8, via trigger de
+ * banco no UPDATE que muda o status). */
+export function usePublishManagerAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; client_id: string }) => {
+      const { error } = await supabase
+        .from('manager_analyses')
+        .update({ status: 'publicada', published_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['manager-analyses', variables.client_id] })
+    },
+    onError: () => toast.error('Não foi possível publicar a análise.'),
+  })
+}
+
+export function useCreateOptimizationLogEntry() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ client_id, description }: { client_id: string; description: string }) => {
+      const { error } = await supabase.from('client_optimization_log').insert({ client_id, description })
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['optimization-log-count', variables.client_id] })
+    },
+    onError: () => toast.error('Não foi possível registrar a alteração.'),
+  })
+}
+
+/** Contagem de "alterações" (`client_optimization_log`) e "criativos"
+ * (`catalog_entries`, `catalog_type='criativo'`, qualquer status exceto
+ * `descartado` — um rascunho já ocupou produção do mês) aplicados a um
+ * cliente dentro de um período — usado no bloco "Otimizações
+ * realizadas" da Análise do Gestor contra `PLAN_LIMITS`.
+ * `periodStart`/`periodEnd` são INCLUSIVOS (ex: '2026-09-01'/'2026-09-30',
+ * mesmo formato de `manager_analyses.period_start/period_end`) — o
+ * limite superior exclusivo pra comparar com `created_at` (timestamptz)
+ * é calculado aqui dentro, pra nenhum call site precisar lembrar do
+ * "+1 dia". */
+export function useOptimizationUsageForPeriod(clientId: string | null, periodStart: string | null, periodEnd: string | null) {
+  return useQuery({
+    queryKey: ['optimization-log-count', clientId, periodStart, periodEnd],
+    queryFn: async () => {
+      const exclusiveEnd = new Date(`${periodEnd}T00:00:00Z`)
+      exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1)
+      const exclusiveEndIso = exclusiveEnd.toISOString()
+      const [changesResult, creativesResult] = await Promise.all([
+        supabase
+          .from('client_optimization_log')
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', clientId as string)
+          .gte('created_at', periodStart as string)
+          .lt('created_at', exclusiveEndIso),
+        supabase
+          .from('catalog_entries')
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', clientId as string)
+          .eq('catalog_type', 'criativo')
+          .neq('status', 'descartado')
+          .gte('created_at', periodStart as string)
+          .lt('created_at', exclusiveEndIso),
+      ])
+      if (changesResult.error) throw changesResult.error
+      if (creativesResult.error) throw creativesResult.error
+      return { changesUsed: changesResult.count ?? 0, creativesUsed: creativesResult.count ?? 0 }
+    },
+    enabled: !!clientId && !!periodStart && !!periodEnd,
+  })
+}
+
 export interface CampaignLinkWithProject {
   id: string
   project_id: string

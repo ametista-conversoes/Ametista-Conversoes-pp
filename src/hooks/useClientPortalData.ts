@@ -339,6 +339,45 @@ export function useMonthlyReport(year: number, month: number) {
   })
 }
 
+// Fase 48.4/48.8 — Análise do Gestor publicada (texto curto que
+// interpreta os números do período) — RLS já garante que o cliente só
+// vê as próprias análises com status 'publicada'.
+export interface ManagerAnalysisRecord {
+  id: string
+  client_id: string
+  period_start: string
+  period_end: string
+  tipo: 'periodica' | 'estrategica_mensal'
+  status: 'rascunho' | 'publicada'
+  published_at: string | null
+  resumo: string | null
+  status_geral: 'no_alvo' | 'atencao' | 'fora_do_alvo' | null
+  diagnostico: string | null
+  otimizacoes_realizadas: string | null
+  proximos_passos: Array<{ titulo: string; data: string | null }>
+  extra_fields: Record<string, unknown>
+  created_at: string
+}
+
+export function usePublishedManagerAnalysesForClient() {
+  const { clientId } = useAuth()
+  return useQuery({
+    queryKey: ['published-manager-analyses', clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('manager_analyses')
+        .select(
+          'id, client_id, period_start, period_end, tipo, status, published_at, resumo, status_geral, diagnostico, otimizacoes_realizadas, proximos_passos, extra_fields, created_at',
+        )
+        .eq('client_id', clientId as string)
+        .order('period_start', { ascending: false })
+      if (error) throw error
+      return data as unknown as ManagerAnalysisRecord[]
+    },
+    enabled: !!clientId,
+  })
+}
+
 export interface NewTaskInput {
   title: string
   description: string | null
