@@ -36,9 +36,10 @@ import {
   useMonthlyReport,
   usePerformanceSnapshots,
   useProjects,
+  usePublishedManagerAnalysesForClient,
   useSmartGoals,
 } from '@/hooks/useClientPortalData'
-import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
+import { formatCurrency, formatDate, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
 import { kpiDescriptions } from '@/lib/kpi-descriptions'
 import {
   aggregateSnapshotKpis,
@@ -74,6 +75,7 @@ export default function Reports() {
   const { data: snapshots, isLoading: loadingSnapshots, isError: snapshotsIsError } = usePerformanceSnapshots()
   const { data: goals, isLoading: loadingGoals, isError: goalsIsError } = useSmartGoals()
   const { data: milestones90d } = useClient90DayMilestonesForClient()
+  const { data: managerAnalyses } = usePublishedManagerAnalysesForClient()
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   // "all" = histórico inteiro (abas Tráfego/Financeiro), "month" = só o
@@ -262,6 +264,7 @@ export default function Reports() {
           <TabsTrigger value="financial">Financeiro</TabsTrigger>
           <TabsTrigger value="channels">Distribuição &amp; Canais</TabsTrigger>
           <TabsTrigger value="monthly">Histórico Mensal</TabsTrigger>
+          <TabsTrigger value="analises">Análises</TabsTrigger>
           <TabsTrigger value="plano90">Plano de 90 dias</TabsTrigger>
         </TabsList>
 
@@ -399,7 +402,8 @@ export default function Reports() {
             />
             {client && monthlyData && (
               <Button
-                onClick={() =>
+                onClick={() => {
+                  const monthAnalysis = (managerAnalyses ?? []).find((a) => a.period_start.startsWith(monthPrefix)) ?? null
                   generateMonthlyReportPdf(
                     client,
                     monthlyData!,
@@ -414,9 +418,10 @@ export default function Reports() {
                       isPartial: isPartialMonth,
                       showLeadMetrics: hasLeadMetrics,
                       previousPeriod: previousPeriodData,
+                      managerAnalysis: monthAnalysis,
                     },
                   )
-                }
+                }}
               >
                 <Download className="h-4 w-4" />
                 Baixar PDF
@@ -563,6 +568,50 @@ export default function Reports() {
                 </p>
               </div>
             </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="analises" className="space-y-4">
+          {!managerAnalyses || managerAnalyses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma análise publicada ainda.</p>
+          ) : (
+            managerAnalyses.map((a) => (
+              <Card key={a.id} className="min-w-0 overflow-hidden rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
+                <CardHeader className="p-0">
+                  <CardTitle className="text-base">
+                    {formatDate(a.period_start)} a {formatDate(a.period_end)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 p-0 pt-4 text-sm">
+                  {a.resumo && <p className="text-foreground">{a.resumo}</p>}
+                  {a.diagnostico && (
+                    <p className="text-muted-foreground">
+                      <span className="text-foreground">Diagnóstico: </span>
+                      {a.diagnostico}
+                    </p>
+                  )}
+                  {a.otimizacoes_realizadas && (
+                    <p className="text-muted-foreground">
+                      <span className="text-foreground">Otimizações realizadas: </span>
+                      {a.otimizacoes_realizadas}
+                    </p>
+                  )}
+                  {a.proximos_passos.length > 0 && (
+                    <div className="text-muted-foreground">
+                      <span className="text-foreground">Próximos passos:</span>
+                      <ul className="ml-4 list-disc">
+                        {a.proximos_passos.map((p, i) => (
+                          <li key={i}>
+                            {p.titulo}
+                            {p.data ? ` (${formatDate(p.data)})` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
           )}
         </TabsContent>
 

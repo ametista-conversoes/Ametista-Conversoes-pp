@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import type { TrendPoint } from '@/components/charts/PerformanceTrendChart'
 import type { ChannelBreakdown } from '@/components/charts/SpendRevenueBarChart'
-import type { ClientRecord, SmartGoalRecord } from '@/hooks/useClientPortalData'
+import type { ClientRecord, ManagerAnalysisRecord, SmartGoalRecord } from '@/hooks/useClientPortalData'
 import { formatCurrency, formatDate, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
 
 export interface MonthlyReportPdfData {
@@ -39,6 +39,9 @@ export interface MonthlyReportPdfOptions {
    * `undefined` omite a coluna inteira (sem dado pra comparar, ex:
    * primeiro mês do cliente); `null`/campos `null` mostram "—". */
   previousPeriod?: MonthlyReportPdfData | null
+  /** Análise do Gestor publicada que cobre esse período, se houver —
+   * a seção só aparece quando existe uma (Fase 48.8). */
+  managerAnalysis?: ManagerAnalysisRecord | null
 }
 
 const PAGE_BOTTOM = 280
@@ -235,6 +238,41 @@ export function generateMonthlyReportPdf(
       doc.text(`${goal.title} — ${current} de ${target}`, 14, y)
       doc.text(`${probability.toFixed(0)}%`, 170, y)
       y += 8
+    }
+  }
+
+  const managerAnalysis = options.managerAnalysis
+  if (managerAnalysis) {
+    y += 6
+    sectionTitle('Análise do Gestor')
+    const analysisLines: string[] = []
+    if (managerAnalysis.resumo) analysisLines.push(managerAnalysis.resumo)
+    if (managerAnalysis.status_geral) {
+      const label =
+        managerAnalysis.status_geral === 'no_alvo'
+          ? 'No alvo'
+          : managerAnalysis.status_geral === 'atencao'
+            ? 'Atenção'
+            : 'Fora do alvo'
+      analysisLines.push(`Status geral: ${label}`)
+    }
+    if (managerAnalysis.diagnostico) analysisLines.push(`Diagnóstico: ${managerAnalysis.diagnostico}`)
+    if (managerAnalysis.otimizacoes_realizadas) analysisLines.push(`Otimizações realizadas: ${managerAnalysis.otimizacoes_realizadas}`)
+    for (const line of analysisLines) {
+      const wrapped = doc.splitTextToSize(line, 180)
+      ensureSpace(wrapped.length * 6 + 2)
+      doc.text(wrapped, 14, y)
+      y += wrapped.length * 6 + 2
+    }
+    if (managerAnalysis.proximos_passos.length > 0) {
+      ensureSpace(8)
+      doc.text('Próximos passos:', 14, y)
+      y += 6
+      for (const passo of managerAnalysis.proximos_passos) {
+        ensureSpace(6)
+        doc.text(`• ${passo.titulo}${passo.data ? ` (${formatDate(passo.data)})` : ''}`, 18, y)
+        y += 6
+      }
     }
   }
 

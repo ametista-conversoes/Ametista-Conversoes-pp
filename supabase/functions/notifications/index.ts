@@ -256,6 +256,26 @@ async function dispatchRenewalReminder(supabase: SupabaseClient, entityId: strin
   })
 }
 
+/** Fase 48.8 — análise do gestor publicada. Só o cliente é avisado
+ * (quem publica já sabe, é o próprio gestor que acabou de agir). */
+async function dispatchManagerAnalysisPublished(supabase: SupabaseClient, entityId: string) {
+  const { data: analysis } = await supabase
+    .from('manager_analyses')
+    .select('id, client_id, clients(name)')
+    .eq('id', entityId)
+    .maybeSingle()
+  if (!analysis) return
+  const clientName = (analysis.clients as unknown as { name: string } | null)?.name ?? 'seu gestor'
+
+  const clientUserIds = await getClientUserIds(supabase, analysis.client_id as string)
+  await sendPushToUsers(supabase, clientUserIds, {
+    title: 'Nova análise do gestor',
+    body: `${clientName}: sua análise do período foi publicada`,
+    url: '/reports',
+    tag: `manager-analysis-${analysis.id}`,
+  })
+}
+
 async function dispatchByKindAndId(supabase: SupabaseClient, kind: string, entityId: string) {
   switch (kind) {
     case 'incident_created':
@@ -276,6 +296,8 @@ async function dispatchByKindAndId(supabase: SupabaseClient, kind: string, entit
       return dispatchRenewalReminder(supabase, entityId, '7 dias')
     case 'renewal_reminder_1d':
       return dispatchRenewalReminder(supabase, entityId, '1 dia')
+    case 'manager_analysis_published':
+      return dispatchManagerAnalysisPublished(supabase, entityId)
   }
 }
 

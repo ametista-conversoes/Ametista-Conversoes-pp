@@ -6,6 +6,7 @@ import { FinancialSummaryCard } from '@/components/dashboard/FinancialSummaryCar
 import { GoalsProgressCard } from '@/components/dashboard/GoalsProgressCard'
 import { HealthScoreGauge } from '@/components/dashboard/HealthScoreGauge'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { LatestManagerAnalysisCard } from '@/components/dashboard/LatestManagerAnalysisCard'
 import { MetricDetailDialog } from '@/components/dashboard/MetricDetailDialog'
 import { NotificationsCard } from '@/components/dashboard/NotificationsCard'
 import { UpcomingMeetingsCard } from '@/components/dashboard/UpcomingMeetingsCard'
@@ -15,6 +16,7 @@ import {
   useAlerts,
   useClient,
   usePerformanceSnapshots,
+  usePublishedManagerAnalysesForClient,
   useSmartGoals,
   useTasks,
   useUpcomingMeetings,
@@ -37,6 +39,7 @@ export default function Dashboard() {
   const { data: meetings } = useUpcomingMeetings()
   const { data: goals } = useSmartGoals()
   const { data: alerts } = useAlerts()
+  const { data: managerAnalyses } = usePublishedManagerAnalysesForClient()
   const [selectedMetric, setSelectedMetric] = useState<MetricKey | null>(null)
 
   if (!clientId) {
@@ -130,6 +133,7 @@ export default function Dashboard() {
           <AssignedTasksCard tasks={tasks ?? []} />
           <FinancialSummaryCard monthlyFee={client?.monthly_fee ?? null} spend={kpis.spend} revenue={revenue} />
           <GoalsProgressCard goals={goals ?? []} />
+          <LatestManagerAnalysisCard analyses={managerAnalyses ?? []} />
           <NotificationsCard alerts={alerts ?? []} />
         </div>
       </div>
