@@ -2769,18 +2769,26 @@ export function useClientLeadStatusCounts(clientId: string | null) {
 }
 
 /** Fase 48.2/48.6 — mesma contagem de `useClientLeadStatusCounts`, mas
- * filtrada a um mês específico (`form_responses.submitted_at`, com
+ * filtrada a um período arbitrário (`form_responses.submitted_at`, com
  * fallback pra `created_at` quando nulo — mesmo critério usado em
  * `generate_monthly_client_reports`, migration-085) — usada no bloco
- * automático da Análise do Gestor pro mês em andamento, que ainda não
- * tem linha fechada em `client_monthly_reports`. Não substitui a
- * função original (usada sem filtro de data em outros lugares). */
-export function useClientLeadStatusCountsForMonth(clientId: string | null, year: number, month: number) {
-  const refMonth = `${year}-${String(month).padStart(2, '0')}-01`
-  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`
+ * automático da Análise do Gestor, cujo período varia por plano (mês
+ * pra Validação/Dominação estratégica, quinzena pra Escala, semana pra
+ * Dominação periódica — ver `resolveAnalysisPeriod`, `manager-analysis.ts`).
+ * `periodStart`/`periodEnd` são INCLUSIVOS. Não substitui
+ * `useClientLeadStatusCounts` (sem filtro de data, usado em outros
+ * lugares). */
+export function useClientLeadStatusCountsForMonth(
+  clientId: string | null,
+  periodStart: string | null,
+  periodEnd: string | null,
+) {
   return useQuery({
-    queryKey: ['lead-status-counts-month', clientId, refMonth],
+    queryKey: ['lead-status-counts-month', clientId, periodStart, periodEnd],
     queryFn: async () => {
+      const exclusiveEnd = new Date(`${periodEnd}T00:00:00Z`)
+      exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1)
+      const exclusiveEndIso = exclusiveEnd.toISOString()
       const [formResult, manualResult] = await Promise.all([
         supabase
           .from('form_responses')
@@ -2790,15 +2798,15 @@ export function useClientLeadStatusCountsForMonth(clientId: string | null, year:
           .from('manual_leads')
           .select('status, created_at')
           .eq('client_id', clientId as string)
-          .gte('created_at', refMonth)
-          .lt('created_at', nextMonth),
+          .gte('created_at', periodStart as string)
+          .lt('created_at', exclusiveEndIso),
       ])
       if (formResult.error) throw formResult.error
       if (manualResult.error) throw manualResult.error
       const formRows = (formResult.data as { status: LeadStatus; submitted_at: string | null; created_at: string }[]).filter(
         (r) => {
           const ref = r.submitted_at ?? r.created_at
-          return ref >= refMonth && ref < nextMonth
+          return ref >= (periodStart as string) && ref < exclusiveEndIso
         },
       )
       const manualRows = manualResult.data as { status: LeadStatus }[]
@@ -2808,7 +2816,7 @@ export function useClientLeadStatusCountsForMonth(clientId: string | null, year:
       const parados_em_novo = allClassified.filter((r) => r.status === 'novo').length
       return { leads, vendas, parados_em_novo, leadToSaleRate: leads > 0 ? (vendas / leads) * 100 : null }
     },
-    enabled: !!clientId,
+    enabled: !!clientId && !!periodStart && !!periodEnd,
   })
 }
 

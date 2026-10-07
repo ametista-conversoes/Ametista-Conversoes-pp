@@ -139,6 +139,19 @@ export function aggregateSnapshotKpisForMonth(snapshots: PerformanceSnapshotReco
   return sumSnapshotKpis(snapshots.filter((s) => s.snapshot_date.startsWith(prefix)))
 }
 
+/** Fase 48.6 — mesmas fórmulas, mas pra um período arbitrário
+ * (`periodStart`/`periodEnd` INCLUSIVOS) em vez de um mês calendário
+ * inteiro — a Análise do Gestor usa quinzena (Escala) e semana
+ * (Dominação periódica), que `aggregateSnapshotKpisForMonth` não
+ * cobre. */
+export function aggregateSnapshotKpisForRange(
+  snapshots: PerformanceSnapshotRecord[],
+  periodStart: string,
+  periodEnd: string,
+): SnapshotKpis {
+  return sumSnapshotKpis(snapshots.filter((s) => s.snapshot_date >= periodStart && s.snapshot_date <= periodEnd))
+}
+
 // Fase 22 — chave de cada métrica clicável (KpiCard -> MetricDetailDialog).
 export type MetricKey = 'spend' | 'revenue' | 'roas' | 'cpa' | 'ctr' | 'cpc' | 'conversionRate' | 'conversions' | 'impressions' | 'clicks'
 

@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 import { CatalogCard } from '@/components/admin/CatalogCard'
 import { Client90DayMilestonesCard } from '@/components/admin/Client90DayMilestonesCard'
 import { ClientAccessCard } from '@/components/admin/ClientAccessCard'
+import { ClientAnalysesCard } from '@/components/admin/ClientAnalysesCard'
 import { ClientPerformanceMetricsCard } from '@/components/admin/ClientPerformanceMetricsCard'
 import { ClientPlatformCard } from '@/components/admin/ClientPlatformCard'
 import { MetricAlertThresholdsCard } from '@/components/admin/MetricAlertThresholdsCard'
@@ -757,6 +758,8 @@ export default function ClientDetail() {
       <ClientAccessCard clientId={client.id} />
 
       <MetricAlertThresholdsCard clientId={client.id} />
+
+      <ClientAnalysesCard client={client} clientGoals={clientGoals} />
 
       {/* Cassie IA — conversa própria do gestor sobre esse cliente,
           separada da conversa que o próprio cliente tem com a Cassie.

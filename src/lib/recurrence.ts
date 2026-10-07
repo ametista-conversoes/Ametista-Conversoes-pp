@@ -35,7 +35,10 @@ export const recurrenceShortLabels: Record<RecurrenceInterval, string> = {
 
 // Mesmo mapeamento de `meeting_recurrence_interval` no banco (migration-015):
 // Validação = mensal · Escala = quinzenal · Dominação = semanal.
-const PLAN_MEETING_CADENCE_DAYS: Record<string, number> = {
+// Exportado pra ser reaproveitado por `manager-analysis.ts` (Fase
+// 48.6) — a cadência da Análise do Gestor é a MESMA da reunião, não um
+// número novo.
+export const PLAN_MEETING_CADENCE_DAYS: Record<string, number> = {
   validacao: 30,
   escala: 15,
   dominacao: 7,

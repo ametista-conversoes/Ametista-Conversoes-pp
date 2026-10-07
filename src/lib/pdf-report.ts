@@ -43,7 +43,7 @@ export interface MonthlyReportPdfOptions {
 
 const PAGE_BOTTOM = 280
 
-function pctChangeLabel(current: number | null | undefined, previous: number | null | undefined): string {
+export function pctChangeLabel(current: number | null | undefined, previous: number | null | undefined): string {
   if (current == null || previous == null || previous === 0) return '—'
   const pct = ((current - previous) / Math.abs(previous)) * 100
   const sign = pct > 0 ? '+' : ''
