@@ -9,13 +9,18 @@
 -- abaixo pelo valor real antes de rodar, igual já foi feito nos outros
 -- gatilhos de notificação (migration-038). Não commitar o valor real.
 
+-- Lista completa inclui 'manager_analysis_overdue' também (migration-089,
+-- Fase 48.9) pra este arquivo continuar seguro de rodar sozinho em
+-- qualquer ordem relativa à 089 — sem isso, reaplicar esta migration
+-- depois da 089 derruba o constraint e quebra linhas já existentes
+-- com kind='manager_analysis_overdue'.
 alter table public.push_notification_log drop constraint if exists push_notification_log_kind_check;
 alter table public.push_notification_log add constraint push_notification_log_kind_check
   check (kind in (
     'incident_created', 'alert_created', 'client_at_risk',
     'meeting_reminder_1h', 'meeting_reminder_15m', 'smart_goal_overdue',
     'renewal_reminder_30d', 'renewal_reminder_7d', 'renewal_reminder_1d',
-    'manager_analysis_published'
+    'manager_analysis_published', 'manager_analysis_overdue'
   ));
 
 create or replace function public.notify_manager_analysis_published()
