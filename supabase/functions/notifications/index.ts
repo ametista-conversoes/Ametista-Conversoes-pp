@@ -276,6 +276,22 @@ async function dispatchManagerAnalysisPublished(supabase: SupabaseClient, entity
   })
 }
 
+/** Fase 48.9 — análise do gestor vencida (passou da cadência do plano
+ * sem publicar nenhuma pro período corrente). Aviso interno, só
+ * admin/gestor (mesmo padrão de dispatchRenewalReminder). */
+async function dispatchManagerAnalysisOverdue(supabase: SupabaseClient, clientId: string) {
+  const { data: client } = await supabase.from('clients').select('id, name').eq('id', clientId).maybeSingle()
+  if (!client) return
+
+  const adminGestorIds = await getAdminGestorUserIds(supabase)
+  await sendPushToUsers(supabase, adminGestorIds, {
+    title: 'Análise do gestor vencida',
+    body: `${client.name} está sem análise publicada no período corrente`,
+    url: `/clients/${client.id}`,
+    tag: `manager-analysis-overdue-${client.id}`,
+  })
+}
+
 async function dispatchByKindAndId(supabase: SupabaseClient, kind: string, entityId: string) {
   switch (kind) {
     case 'incident_created':
@@ -298,6 +314,8 @@ async function dispatchByKindAndId(supabase: SupabaseClient, kind: string, entit
       return dispatchRenewalReminder(supabase, entityId, '1 dia')
     case 'manager_analysis_published':
       return dispatchManagerAnalysisPublished(supabase, entityId)
+    case 'manager_analysis_overdue':
+      return dispatchManagerAnalysisOverdue(supabase, entityId)
   }
 }
 
@@ -330,7 +348,7 @@ async function handleTick(req: Request) {
 
   const supabase = getServiceClient()
 
-  const [atRisk, overdueGoals, reminders1h, reminders15m, renewal30d, renewal7d, renewal1d] = await Promise.all([
+  const [atRisk, overdueGoals, reminders1h, reminders15m, renewal30d, renewal7d, renewal1d, analysisOverdue] = await Promise.all([
     supabase.rpc('detect_new_at_risk_clients'),
     supabase.rpc('detect_new_overdue_goals'),
     supabase.rpc('detect_new_meeting_reminders_1h'),
@@ -338,6 +356,7 @@ async function handleTick(req: Request) {
     supabase.rpc('detect_new_renewal_reminders_30d'),
     supabase.rpc('detect_new_renewal_reminders_7d'),
     supabase.rpc('detect_new_renewal_reminders_1d'),
+    supabase.rpc('detect_new_manager_analysis_overdue'),
   ])
 
   const errors = [
@@ -348,6 +367,7 @@ async function handleTick(req: Request) {
     renewal30d.error,
     renewal7d.error,
     renewal1d.error,
+    analysisOverdue.error,
   ].filter(Boolean)
   if (errors.length > 0) {
     await logServerError('notifications', 'handleTick: rodar detect_new_*', errors)
@@ -362,6 +382,7 @@ async function handleTick(req: Request) {
     ...(renewal30d.data ?? []).map((r: { id: string }) => ({ kind: 'renewal_reminder_30d', id: r.id })),
     ...(renewal7d.data ?? []).map((r: { id: string }) => ({ kind: 'renewal_reminder_7d', id: r.id })),
     ...(renewal1d.data ?? []).map((r: { id: string }) => ({ kind: 'renewal_reminder_1d', id: r.id })),
+    ...(analysisOverdue.data ?? []).map((r: { id: string }) => ({ kind: 'manager_analysis_overdue', id: r.id })),
   ]
 
   for (const item of dispatched) {

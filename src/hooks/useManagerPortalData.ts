@@ -31,6 +31,7 @@ export interface ManagerClientRecord {
   average_ticket: number | null
   /** Fase 31 — só relevante quando `plan === 'validacao'`. */
   chosen_platform: 'meta' | 'google' | null
+  created_at: string
 }
 
 export interface ManagerIncidentRecord {
@@ -1242,6 +1243,19 @@ const MANAGER_ANALYSIS_SELECT =
   'id, client_id, period_start, period_end, tipo, status, published_at, resumo, status_geral, diagnostico, ' +
   'otimizacoes_realizadas, creatives_used_snapshot, changes_used_snapshot, proximos_passos, pendencias_cliente_texto, ' +
   'extra_fields, created_at, updated_at'
+
+/** Todas as análises de todos os clientes — Fase 48.9, "Análises
+ * pendentes" em Atividades (`computePendingAnalyses`). */
+export function useAllManagerAnalyses() {
+  return useQuery({
+    queryKey: ['manager-analyses-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('manager_analyses').select('client_id, status, published_at')
+      if (error) throw error
+      return data as Array<{ client_id: string; status: string; published_at: string | null }>
+    },
+  })
+}
 
 /** Histórico completo (rascunhos + publicadas) de um cliente — Central
  * de Informações do Cliente, card "Análises". */

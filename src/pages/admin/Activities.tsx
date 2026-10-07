@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Archive, ChevronDown, ChevronUp, ListChecks, Repeat, RotateCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Archive, ChevronDown, ChevronUp, ListChecks, Repeat, RotateCw, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { NewActivityChecklistItemDialog } from '@/components/onboarding/NewActivityChecklistItemDialog'
 import { BulkDeleteToggle } from '@/components/shared/BulkDeleteToggle'
 import { ArchivedTasksDialog } from '@/components/tasks/ArchivedTasksDialog'
@@ -14,6 +15,7 @@ import type { ActivityChecklistItemRecord, ManagerClientRecord } from '@/hooks/u
 import {
   useAllClients,
   useActivityChecklistItems,
+  useAllManagerAnalyses,
   useArchivedActivityChecklistItems,
   useAutoArchiveOldTasks,
   useDeleteActivityChecklistItems,
@@ -21,6 +23,7 @@ import {
   useToggleActivityChecklistItem,
 } from '@/hooks/useManagerPortalData'
 import { useMarkNavSeen } from '@/hooks/useNavSeen'
+import { computePendingAnalyses } from '@/lib/pending-analysis'
 import {
   daysUntilRecurrenceDue,
   effectiveActivityCompleted,
@@ -48,6 +51,8 @@ export default function Activities() {
   useMarkNavSeen('/activities')
   useAutoArchiveOldTasks()
   const { data: clients } = useAllClients()
+  const { data: allAnalyses } = useAllManagerAnalyses()
+  const pendingAnalyses = computePendingAnalyses(clients ?? [], allAnalyses ?? [])
   const { data: items, isLoading } = useActivityChecklistItems()
   const { data: archivedItems } = useArchivedActivityChecklistItems()
   const toggleItem = useToggleActivityChecklistItem()
@@ -209,6 +214,28 @@ export default function Activities() {
           <NewActivityChecklistItemDialog />
         </div>
       </div>
+
+      {pendingAnalyses.length > 0 && (
+        <Card className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-5 md:p-6">
+          <CardHeader className="p-0">
+            <CardTitle className="flex items-center gap-2 text-base text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+              Análises do Gestor pendentes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 p-0 pt-3">
+            {pendingAnalyses.map((p) => (
+              <Link
+                key={p.clientId}
+                to={`/clients/${p.clientId}`}
+                className="block text-sm text-amber-300 hover:underline"
+              >
+                {p.clientName} — sem análise publicada há {p.daysSinceLastPublished} dias (cadência: {p.cadenceDays} dias)
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {clientsWithItems.length === 0 && (
         <p className="text-sm text-muted-foreground">Nenhum item de Atividades cadastrado ainda.</p>
