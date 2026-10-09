@@ -176,6 +176,29 @@ export function useUpdateClientDetails() {
   })
 }
 
+/** Fase 48.13 — salva só `internal_notes`, separado do "Salvar" geral
+ * (`useUpdateClientDetails`, que grava todos os campos do cabeçalho
+ * juntos). Pedido do usuário: o botão do card "Observações internas"
+ * estava gravando campos que não tinham nada a ver (nome, telefone,
+ * plano etc.) só por estarem na mesma tela — agora ele só grava o
+ * texto da nota em si, sem tocar em mais nada. */
+export function useUpdateClientNotes() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, internal_notes }: { id: string; internal_notes: string | null }) => {
+      const { error } = await supabase.from('clients').update({ internal_notes }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['manager-clients'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-client', id] })
+    },
+    onError: () => {
+      toast.error('Não foi possível salvar as observações internas.')
+    },
+  })
+}
+
 /** Contas de login (profiles com role='cliente') vinculadas a um
  * cliente — Fase 26. Não dá pra buscar isso com um select comum: a
  * RLS de "profiles" só deixa cada um ler a própria linha, então isso

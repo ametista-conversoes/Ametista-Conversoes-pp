@@ -75,6 +75,7 @@ import {
   useRecomputeClientHealthScore,
   useToggleActivityChecklistItem,
   useUpdateClientDetails,
+  useUpdateClientNotes,
   useUpdateClientStatus,
   useUpdateProject,
 } from '@/hooks/useManagerPortalData'
@@ -121,6 +122,7 @@ export default function ClientDetail() {
   const toggleActivityItem = useToggleActivityChecklistItem()
   const updateStatus = useUpdateClientStatus()
   const updateDetails = useUpdateClientDetails()
+  const updateNotes = useUpdateClientNotes()
   const recomputeHealthScore = useRecomputeClientHealthScore()
   const { data: cassieMessages } = useCassieMessages(id ?? '')
   const sendCassieMessage = useSendCassieMessage(id ?? '')
@@ -150,6 +152,7 @@ export default function ClientDetail() {
   const [leadsToClose, setLeadsToClose] = useState<string | null>(null)
   const [averageTicket, setAverageTicket] = useState<string | null>(null)
   const [savingDetails, setSavingDetails] = useState(false)
+  const [savingNotes, setSavingNotes] = useState(false)
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Carregando...</p>
@@ -229,6 +232,19 @@ export default function ClientDetail() {
       // erro já avisado pelo onError do hook
     } finally {
       setSavingDetails(false)
+    }
+  }
+
+  async function handleSaveNotes() {
+    if (!client) return
+    setSavingNotes(true)
+    try {
+      await updateNotes.mutateAsync({ id: client.id, internal_notes: notesValue.trim() ? notesValue.trim() : null })
+      toast.success('Observações internas salvas.')
+    } catch {
+      // erro já avisado pelo onError do hook
+    } finally {
+      setSavingNotes(false)
     }
   }
 
@@ -317,6 +333,14 @@ export default function ClientDetail() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Fase 48.13 — pedido do usuário: antes só dava pra salvar os
+           * campos editáveis da ficha (nome, contato, plano, financeiro
+           * etc.) rolando até o fim da página, no botão de Observações
+           * internas (que agora ficou específico pra nota, ver abaixo). */}
+          <Button type="button" onClick={handleSaveDetails} disabled={savingDetails}>
+            {savingDetails ? 'Salvando...' : 'Salvar'}
+          </Button>
         </CardContent>
       </Card>
 
@@ -749,8 +773,8 @@ export default function ClientDetail() {
             value={notesValue}
             onChange={(e) => setNotes(e.target.value)}
           />
-          <Button onClick={handleSaveDetails} disabled={savingDetails}>
-            {savingDetails ? 'Salvando...' : 'Salvar'}
+          <Button onClick={handleSaveNotes} disabled={savingNotes}>
+            {savingNotes ? 'Salvando...' : 'Salvar'}
           </Button>
         </CardContent>
       </Card>
