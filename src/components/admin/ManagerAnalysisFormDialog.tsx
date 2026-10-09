@@ -396,18 +396,16 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
           </div>
         )}
 
-        {isDraft && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full border-purple-600/20 text-purple-300 hover:bg-purple-600/10"
-            disabled={suggesting}
-            onClick={handleSuggestDraft}
-          >
-            <Sparkles className="h-4 w-4" />
-            {suggesting ? 'Pensando...' : 'Sugerir rascunho com a Cassie'}
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-purple-600/20 text-purple-300 hover:bg-purple-600/10"
+          disabled={suggesting}
+          onClick={handleSuggestDraft}
+        >
+          <Sparkles className="h-4 w-4" />
+          {suggesting ? 'Pensando...' : 'Sugerir rascunho com a Cassie'}
+        </Button>
 
         <Form {...form}>
           <form className="space-y-4">
