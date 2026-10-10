@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { differenceInMinutes } from 'date-fns'
 import { UserPlus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -99,7 +100,14 @@ export default function Leads() {
           <Card key={lead.id} className="rounded-xl border border-[#1A2540] bg-[#131C31] p-4 hover:border-purple-600/30">
             <CardContent className="space-y-2 p-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">{formatDateTime(lead.submitted_at)}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground">{formatDateTime(lead.submitted_at)}</p>
+                  {lead.status === 'novo' && lead.submitted_at && differenceInMinutes(new Date(), new Date(lead.submitted_at)) > 15 && (
+                    <span className="text-xs font-medium text-amber-400">
+                      Passou de 15 min sem resposta
+                    </span>
+                  )}
+                </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild disabled={setStatus.isPending}>
                     <Badge className={cn('cursor-pointer', leadStatusStyles[lead.status])}>

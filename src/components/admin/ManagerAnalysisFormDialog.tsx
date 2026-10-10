@@ -643,7 +643,8 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
                   {overLimit && <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
                   <span>
                     {creativesUsed} de {planLimits.criativosPorMes} criativos usados · {changesUsed} de {planLimits.alteracoesPorMes}{' '}
-                    alterações usadas (registre no botão abaixo pra contar aqui)
+                    alterações usadas (registre no botão abaixo pra contar aqui) · limite contratual de{' '}
+                    {planLimits.anunciosAtivos} anúncios ativos simultâneos (Anexo I — não contado automaticamente)
                   </span>
                 </div>
               )}

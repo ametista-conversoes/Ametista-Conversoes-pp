@@ -64,7 +64,8 @@ export function EmergencyPauseButton() {
           <DialogTitle>Confirmar Pausa de Emergência</DialogTitle>
           <DialogDescription>
             Isso pausa as campanhas escolhidas e abre um incidente crítico para a agência atender com prioridade
-            máxima. Use só em situações urgentes.
+            máxima. Use só em situações urgentes. A agência tem até 1 dia útil para executar a pausa (contrato,
+            cláusula 4.2-VIII) — para interrupção imediata, você também pode pausar direto na sua conta de anúncios.
           </DialogDescription>
         </DialogHeader>
 
