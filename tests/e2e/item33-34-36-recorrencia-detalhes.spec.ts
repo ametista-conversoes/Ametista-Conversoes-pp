@@ -113,6 +113,6 @@ test('item 36 -- badge de recorrência aparece no card do MODELO de Workflow de 
   await page.goto('/workflows')
   await page.getByRole('tab', { name: 'Atividades' }).click()
 
-  const card = page.locator('div', { hasText: TEMPLATE_NAME }).filter({ has: page.getByText(TEMPLATE_ITEM_TITLE) })
+  const card = page.locator('div', { hasText: TEMPLATE_NAME }).filter({ has: page.getByText(TEMPLATE_ITEM_TITLE) }).last()
   await expect(card.getByText('7 dias', { exact: false })).toBeVisible()
 })

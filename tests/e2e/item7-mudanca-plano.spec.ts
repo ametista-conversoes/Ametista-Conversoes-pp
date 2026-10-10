@@ -29,7 +29,9 @@ test('trocar o plano do cliente na Central de Informações e salvar', async ({ 
   await page.getByText('Validação', { exact: true }).click()
   await page.getByRole('option', { name: 'Dominação', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Salvar', exact: true }).click()
+  // Fase 48.13: a página tem 2 botões "Salvar" -- o 1º (topo, ao lado do
+  // status) salva a ficha inteira; o 2º é só de Observações internas.
+  await page.getByRole('button', { name: 'Salvar', exact: true }).first().click()
 
   // Se der erro, um toast de erro aparece na hora -- captura os dois
   // desfechos possíveis pra não travar no timeout.
