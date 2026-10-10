@@ -86,6 +86,11 @@ export function ApprovalList({ approvals }: ApprovalListProps) {
               {approval.feedback && (
                 <p className="mt-2 text-xs text-muted-foreground">Feedback: {approval.feedback}</p>
               )}
+              {approval.status === 'pending' && approval.requires_explicit_approval && (
+                <p className="mt-2 text-xs text-amber-400">
+                  Este item tem preço, oferta ou condição comercial — não vence sozinho, só avança quando você decidir.
+                </p>
+              )}
               {approval.status === 'pending' && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => handleApprove(approval)} disabled={respondToApproval.isPending}>

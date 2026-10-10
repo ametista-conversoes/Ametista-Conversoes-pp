@@ -58,6 +58,9 @@ export function ManagerApprovalList({ approvals }: ManagerApprovalListProps) {
               </button>
             )}
             {approval.feedback && <p className="mt-2 text-xs text-muted-foreground">Feedback: {approval.feedback}</p>}
+            {approval.status === 'pending' && approval.requires_explicit_approval && (
+              <p className="mt-2 text-xs text-amber-400">Marcado como aprovação expressa — não vence sozinho em 48h.</p>
+            )}
           </div>
         ))}
       </CardContent>

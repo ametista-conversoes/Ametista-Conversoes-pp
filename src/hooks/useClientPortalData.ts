@@ -132,6 +132,7 @@ export interface ApprovalRecord {
   feedback: string | null
   created_at: string
   auto_approved: boolean
+  requires_explicit_approval: boolean
 }
 
 export interface PerformanceSnapshotRecord {

@@ -3609,6 +3609,7 @@ export interface ManagerApprovalRecord {
   feedback: string | null
   created_at: string
   auto_approved: boolean
+  requires_explicit_approval: boolean
 }
 
 export function useClientApprovals(clientId: string | null) {
@@ -3632,6 +3633,7 @@ export interface NewManagerApprovalInput {
   client_id: string
   file_url: string
   file_type: string | null
+  requires_explicit_approval: boolean
 }
 
 export function useCreateManagerApproval() {

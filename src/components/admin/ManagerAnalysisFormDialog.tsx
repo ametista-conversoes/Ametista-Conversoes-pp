@@ -32,7 +32,6 @@ import {
   type AnalysisTipo,
   analysisCadenceLabel,
   daysElapsedInPeriod,
-  daysInPeriod,
   previousAnalysisPeriod,
   resolveAnalysisPeriod,
 } from '@/lib/manager-analysis'
@@ -174,14 +173,22 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
   const creativesUsed = usage?.creativesUsed ?? 0
   const overLimit = planLimits && (changesUsed > planLimits.alteracoesPorMes || creativesUsed > planLimits.criativosPorMes)
 
-  // Fase 48.7 -- modificador de verba (só Escala periódica).
+  // Fase 48.7/49 -- modificador de verba (Anexo I), pros 3 planos (achado
+  // de auditoria: só estava ligado pra Escala, mas o contrato tabela
+  // Validação/Escala/Dominação igualmente). Usa o GASTO DO MÊS CIVIL
+  // inteiro (regra 4.1 do Anexo I: "mês civil") -- nunca o gasto do
+  // período da análise (quinzena/semana), que já era o bug original:
+  // projetava o RESTO DA QUINZENA como se fosse o mês inteiro.
   const budgetModifier = useMemo(() => {
-    if (plan !== 'escala' || tipo !== 'periodica') return null
-    const elapsed = daysElapsedInPeriod(period.periodStart)
-    const total = daysInPeriod(period.periodStart, period.periodEnd)
-    const projected = projectMonthSpend(numbers.kpis.spend, elapsed, total)
-    return { projected, modifier: computeMediaBudgetModifier('escala', projected) }
-  }, [plan, tipo, period.periodStart, period.periodEnd, numbers.kpis.spend])
+    const [y, m] = period.periodStart.split('-').map(Number)
+    const monthStart = `${y}-${String(m).padStart(2, '0')}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    const monthKpis = aggregateSnapshotKpisForRange(snapshots ?? [], monthStart, monthEnd)
+    const elapsed = Math.min(daysElapsedInPeriod(monthStart), lastDay)
+    const projected = projectMonthSpend(monthKpis.spend, elapsed, lastDay)
+    return { projected, modifier: computeMediaBudgetModifier(plan, projected) }
+  }, [plan, period.periodStart, snapshots])
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -213,17 +220,22 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
   }
 
   function buildExtraFields(values: FormValues): Record<string, unknown> {
+    // Ritmo de verba agora é gravado como snapshot nos 3 planos (achado
+    // de auditoria: o modificador do Anexo I vale pra todos, não só Escala).
+    const ritmoVerba = {
+      ritmo_verba_projecao: budgetModifier?.projected ?? null,
+      ritmo_verba_modificador_estimado: budgetModifier?.modifier?.modifier ?? null,
+      ritmo_verba_faixa_label: budgetModifier?.modifier?.bracketLabel ?? null,
+    }
     if (plan === 'escala') {
       return {
         meta_vs_google: values.meta_vs_google?.trim() || null,
         testes_ab_quinzena: values.testes_ab_quinzena?.trim() || null,
-        ritmo_verba_projecao: budgetModifier?.projected ?? null,
-        ritmo_verba_modificador_estimado: budgetModifier?.modifier?.modifier ?? null,
-        ritmo_verba_faixa_label: budgetModifier?.modifier?.bracketLabel ?? null,
+        ...ritmoVerba,
       }
     }
     if (plan === 'dominacao' && values.tipo === 'periodica') {
-      return { alertas: values.alertas?.trim() || null }
+      return { alertas: values.alertas?.trim() || null, ...ritmoVerba }
     }
     if (plan === 'dominacao' && values.tipo === 'estrategica_mensal') {
       return {
@@ -231,6 +243,7 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
         parcela_impressoes_perdida: values.parcela_impressoes_perdida?.trim() || null,
         cenario_escala: values.cenario_escala?.trim() || null,
         riscos: values.riscos?.trim() || null,
+        ...ritmoVerba,
       }
     }
     // Validação
@@ -238,6 +251,7 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
       teste_do_mes: values.teste_do_mes?.trim() || null,
       resultado_teste: values.resultado_teste?.trim() || null,
       recomendacao: values.recomendacao?.trim() || null,
+      ...ritmoVerba,
     }
   }
 

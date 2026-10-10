@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ export function NewManagerApprovalDialog({ clientId }: NewManagerApprovalDialogP
   const [open, setOpen] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
+  const [requiresExplicit, setRequiresExplicit] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const createApproval = useCreateManagerApproval()
 
@@ -39,10 +41,12 @@ export function NewManagerApprovalDialog({ clientId }: NewManagerApprovalDialogP
         client_id: clientId,
         file_url: path,
         file_type: file.type || null,
+        requires_explicit_approval: requiresExplicit,
       })
       toast.success('Enviado para aprovação do cliente.')
       setFile(null)
       setTitle('')
+      setRequiresExplicit(false)
       setOpen(false)
     } catch {
       toast.error('Não foi possível enviar para aprovação.')
@@ -81,6 +85,19 @@ export function NewManagerApprovalDialog({ clientId }: NewManagerApprovalDialogP
             <Label htmlFor="approval-file-input">Arquivo</Label>
             <Input id="approval-file-input" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-secondary/50 px-3 py-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={requiresExplicit}
+              onCheckedChange={(checked) => setRequiresExplicit(checked === true)}
+            />
+            <span>
+              Contém preço, oferta, promoção ou condição comercial
+              <span className="block text-xs text-muted-foreground">
+                Nunca aprova sozinho por atraso — precisa sempre de uma decisão expressa do cliente (contrato 4.1 §4).
+              </span>
+            </span>
+          </label>
         </div>
         <DialogFooter>
           <Button onClick={handleSubmit} disabled={!file || !title.trim() || submitting}>
