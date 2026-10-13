@@ -202,6 +202,38 @@ function getServiceClient() {
   return createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 }
 
+/** Fase 50.C.1 — "Grupos de Anúncios" e "Campanha" (resumos/insights)
+ * normalmente fazem uma chamada AO VIVO pra API real do Google/Meta,
+ * nunca gravada no banco — impossível pra um cliente de demonstração,
+ * que não tem token real nenhum por trás da conexão. Pra esses dois
+ * casos, se a conexão pertence a um cliente `is_demo`, serve o
+ * "registro" sintético de `demo_campaign_details` no lugar da chamada
+ * real, em vez de tentar (e falhar) contra a API de verdade. */
+async function getDemoCampaignDetails(
+  supabase: SupabaseClient,
+  connectionId: string,
+  campaignId: string,
+): Promise<{ ad_groups: unknown; insights: unknown } | null> {
+  const { data: connection } = await supabase
+    .from('digital_asset_connections')
+    .select('digital_assets(clients(is_demo))')
+    .eq('id', connectionId)
+    .maybeSingle()
+  const assets = connection?.digital_assets as unknown
+  const asset = Array.isArray(assets) ? assets[0] : assets
+  const isDemo = (asset as { clients?: { is_demo?: boolean } | { is_demo?: boolean }[] } | undefined)?.clients
+  const isDemoClient = Array.isArray(isDemo) ? isDemo[0]?.is_demo : isDemo?.is_demo
+  if (!isDemoClient) return null
+
+  const { data } = await supabase
+    .from('demo_campaign_details')
+    .select('ad_groups, insights')
+    .eq('connection_id', connectionId)
+    .eq('external_campaign_id', campaignId)
+    .maybeSingle()
+  return data ?? { ad_groups: [], insights: {} }
+}
+
 /** Compara em tempo constante (Fase 20.1) — evita que alguém descubra
  * um segredo (X-Cron-Secret/X-Webhook-Secret) aos poucos, medindo
  * quanto tempo cada tentativa errada leva pra falhar. */
@@ -2125,6 +2157,9 @@ async function handleListAdGroups(req: Request, url: URL) {
     return jsonResponse({ error: 'Conexão incompleta (falta conta de anúncios)' }, 400)
   }
 
+  const demoDetails = await getDemoCampaignDetails(supabase, connectionId, campaignId)
+  if (demoDetails) return jsonResponse({ adGroups: demoDetails.ad_groups ?? [] })
+
   const accessToken = await resolveAccessToken(supabase, connection)
   if (!accessToken) return jsonResponse({ error: 'Não foi possível obter um token de acesso válido' }, 502)
 
@@ -2328,6 +2363,30 @@ async function handleListCampaignInsights(req: Request, url: URL) {
   }
   if (!connection.external_account_id) {
     return jsonResponse({ error: 'Conexão incompleta (falta conta de anúncios)' }, 400)
+  }
+
+  const demoDetails = await getDemoCampaignDetails(supabase, connectionId, campaignId)
+  if (demoDetails) {
+    const i = (demoDetails.insights ?? {}) as Partial<{
+      devices: unknown[]
+      topSearchTerms: unknown[]
+      topKeywords: unknown[]
+      geoBreakdown: unknown[]
+      conversionBreakdown: unknown[]
+      ageRanges: unknown[]
+      genders: unknown[]
+      bestTiming: unknown
+    }>
+    return jsonResponse({
+      devices: i.devices ?? [],
+      topSearchTerms: i.topSearchTerms ?? [],
+      topKeywords: i.topKeywords ?? [],
+      geoBreakdown: i.geoBreakdown ?? [],
+      conversionBreakdown: i.conversionBreakdown ?? [],
+      ageRanges: i.ageRanges ?? [],
+      genders: i.genders ?? [],
+      bestTiming: i.bestTiming ?? null,
+    })
   }
 
   const accessToken = await resolveAccessToken(supabase, connection)

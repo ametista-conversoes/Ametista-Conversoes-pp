@@ -303,6 +303,41 @@ async function seedClinicaSorriso(supabase: SupabaseClient, clientId: string, to
     linkIds[c.id] = link.id as string
   }
 
+  // ---- "Grupos de Anúncios" (Fase 50.C.1) — essa tela normalmente faz
+  // uma chamada AO VIVO pra API real do Meta/Google, nunca gravada no
+  // banco; pra um cliente demo (sem conexão real) isso é impossível, então
+  // guardamos aqui um "registro" sintético que o Edge Function passa a
+  // servir no lugar da chamada real quando a conexão é de um cliente
+  // `is_demo` (ver getDemoCampaignDetails em integrations/index.ts). ----
+  function adSet(id: string, name: string, status: string, spend: number, clicks: number, impressions: number, conversions: number) {
+    return { id, name, status, spend: round2(spend), clicks, impressions, conversions, avgQualityScore: null }
+  }
+  await insertInChunks(supabase, 'demo_campaign_details', [
+    {
+      connection_id: metaConn.id,
+      external_campaign_id: 'demo-sorriso-interesse',
+      ad_groups: [
+        adSet('demo-adset-interesse-1', 'Interesse — Saúde bucal/estética', 'ACTIVE', 2300, 980, 24500, 62),
+        adSet('demo-adset-interesse-2', 'Público aberto 28-55 anos', 'ACTIVE', 1450, 610, 15200, 38),
+      ],
+    },
+    {
+      connection_id: metaConn.id,
+      external_campaign_id: 'demo-sorriso-remarketing',
+      ad_groups: [adSet('demo-adset-remkt-1', 'Visitantes do site — 30 dias', 'ACTIVE', 1650, 520, 9800, 41)],
+    },
+    {
+      connection_id: metaConn.id,
+      external_campaign_id: 'demo-sorriso-teste-video',
+      ad_groups: [adSet('demo-adset-video-1', 'Vídeo — depoimento + antes/depois', 'ACTIVE', 1200, 430, 11200, 50)],
+    },
+    {
+      connection_id: metaConn.id,
+      external_campaign_id: 'demo-sorriso-teste-carrossel',
+      ad_groups: [adSet('demo-adset-carrossel-1', 'Carrossel — depoimentos', 'ACTIVE', 900, 310, 8700, 28)],
+    },
+  ])
+
   // ---- Série diária: nível cliente (Dashboard/Relatórios/Central) ----
   const clientM1 = buildDailySeries(m1.year, m1.month0, 1500, 40.5, 14)
   const clientM2 = buildDailySeries(m2.year, m2.month0, 3000, 31.9, 0)

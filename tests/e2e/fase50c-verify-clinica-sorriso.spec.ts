@@ -35,6 +35,14 @@ test('Projeto mostra o teste A/B vídeo x carrossel com o vídeo vencendo', asyn
   await expect(page.getByText('Teste A/B — Carrossel')).toBeVisible()
 })
 
+test('aba Grupos de Anúncios mostra o registro sintético, sem chamar a API real', async ({ page }) => {
+  await loginAs(page, 'gestor')
+  await page.goto(`/clients/${clientId}`)
+  await page.getByText('Avaliação Odontológica — Meta Ads').click()
+  await page.getByRole('tab', { name: 'Grupos de Anúncios' }).click()
+  await expect(page.getByText('Vídeo — depoimento + antes/depois')).toBeVisible()
+})
+
 test('Análises do Gestor mostra 3 publicadas, uma por mês', async ({ page }) => {
   await loginAs(page, 'gestor')
   await page.goto(`/clients/${clientId}`)
