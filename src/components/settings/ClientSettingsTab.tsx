@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useClient, useCreateComment } from '@/hooks/useClientPortalData'
 import { formatCurrency } from '@/lib/format'
-import { clientStatusLabels, clientStatusStyles, planLabels } from '@/lib/status-styles'
+import { clientStatusLabels, clientStatusStyles, demoClientLabel, demoClientStyle, planLabels } from '@/lib/status-styles'
 
 const DATA_EXPORT_REQUEST_TEXT =
   'Solicito a exportação dos meus dados, conforme a cláusula 5.5 do contrato: relatórios, registros de ' +
@@ -38,9 +38,12 @@ export function ClientSettingsTab() {
     <div className="space-y-6">
       <Card className="rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
         <CardHeader className="p-0">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-4 w-4 text-purple-400" />
-            Dados do cliente
+          <CardTitle className="flex items-center justify-between gap-2 text-base">
+            <span className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-purple-400" />
+              Dados do cliente
+            </span>
+            {client.is_demo && <Badge className={demoClientStyle}>{demoClientLabel}</Badge>}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 p-0 pt-4 text-sm">

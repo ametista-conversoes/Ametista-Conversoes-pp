@@ -2613,13 +2613,20 @@ async function handleSyncAll(req: Request) {
 
   const { data: connections, error: connectionsError } = await supabase
     .from('digital_asset_connections')
-    .select('id, provider, external_account_id, login_customer_id, agency_provider_connection_id, form_purpose, digital_assets(client_id)')
+    .select('id, provider, external_account_id, login_customer_id, agency_provider_connection_id, form_purpose, digital_assets(client_id, clients(is_demo))')
     .eq('status', 'connected')
     .in('provider', ['google_ads', 'meta_ads', 'google_forms'])
   if (connectionsError) return dbErrorResponse('handleSyncAll: buscar conexões', connectionsError)
 
+  // Fase 50.A — a sincronização real nunca toca cliente de demonstração
+  // (os dados dele são fixos, gerados pelo seed, não vindos do Google/Meta).
+  const realConnections = ((connections ?? []) as unknown as Array<SyncableConnection & { digital_assets: { client_id: string; clients: { is_demo: boolean } | null } | { client_id: string; clients: { is_demo: boolean } | null }[] }>).filter((c) => {
+    const assets = Array.isArray(c.digital_assets) ? c.digital_assets[0] : c.digital_assets
+    return !assets?.clients?.is_demo
+  })
+
   const results: Array<{ connectionId: string } & (SyncResult | FormsSyncResult)> = []
-  for (const connection of (connections ?? []) as SyncableConnection[]) {
+  for (const connection of realConnections as SyncableConnection[]) {
     const result =
       connection.provider === 'google_forms'
         ? await syncFormsConnection(supabase, connection)

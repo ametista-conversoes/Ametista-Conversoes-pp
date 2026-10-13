@@ -37,7 +37,15 @@ export default function DashboardExecutivo() {
     return <p className="text-sm text-muted-foreground">Carregando...</p>
   }
 
-  const kpis = computeExecutiveKpis(clients ?? [], incidents ?? [], tasks ?? [], projects ?? [])
+  // Fase 50.A — clientes de demonstração nunca entram no Dashboard
+  // Executivo (nem nos 8 KPIs, nem nas listas de risco/incidentes).
+  const realClients = (clients ?? []).filter((c) => !c.is_demo)
+  const demoClientIds = new Set((clients ?? []).filter((c) => c.is_demo).map((c) => c.id))
+  const realIncidents = (incidents ?? []).filter((i) => !demoClientIds.has(i.client_id))
+  const realTasks = (tasks ?? []).filter((t) => !demoClientIds.has(t.client_id))
+  const realProjects = (projects ?? []).filter((p) => !demoClientIds.has(p.client_id))
+
+  const kpis = computeExecutiveKpis(realClients, realIncidents, realTasks, realProjects)
 
   const metricConfigs: Record<ExecutiveMetricField, MetricDetailConfig> = {
     mrr_total: { label: 'MRR Total', currentValue: kpis.mrrTotal, formatValue: formatCurrency },
@@ -129,8 +137,8 @@ export default function DashboardExecutivo() {
       <div className="content-grid-container">
         <div className="content-grid gap-4">
           <ProductivityGauge value={kpis.productivity} />
-          <AtRiskClientsList clients={clients ?? []} />
-          <RecentIncidentsList incidents={incidents ?? []} />
+          <AtRiskClientsList clients={realClients} />
+          <RecentIncidentsList incidents={realIncidents} />
         </div>
       </div>
 

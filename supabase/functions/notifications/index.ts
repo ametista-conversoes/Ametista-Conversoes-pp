@@ -146,10 +146,11 @@ async function getClientUserIds(supabase: SupabaseClient, clientId: string): Pro
 async function dispatchIncident(supabase: SupabaseClient, entityId: string) {
   const { data: incident } = await supabase
     .from('incidents')
-    .select('id, title, severity, client_id, clients(name)')
+    .select('id, title, severity, client_id, clients(name, is_demo)')
     .eq('id', entityId)
     .maybeSingle()
   if (!incident) return
+  if ((incident.clients as unknown as { is_demo?: boolean } | null)?.is_demo) return
   const clientName = (incident.clients as unknown as { name: string } | null)?.name ?? 'cliente'
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
@@ -164,10 +165,11 @@ async function dispatchIncident(supabase: SupabaseClient, entityId: string) {
 async function dispatchAlert(supabase: SupabaseClient, entityId: string) {
   const { data: alert } = await supabase
     .from('alerts')
-    .select('id, title, client_id, clients(name)')
+    .select('id, title, client_id, clients(name, is_demo)')
     .eq('id', entityId)
     .maybeSingle()
   if (!alert) return
+  if ((alert.clients as unknown as { is_demo?: boolean } | null)?.is_demo) return
   const clientName = (alert.clients as unknown as { name: string } | null)?.name ?? 'cliente'
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
@@ -188,8 +190,8 @@ async function dispatchAlert(supabase: SupabaseClient, entityId: string) {
 }
 
 async function dispatchClientAtRisk(supabase: SupabaseClient, clientId: string) {
-  const { data: client } = await supabase.from('clients').select('id, name').eq('id', clientId).maybeSingle()
-  if (!client) return
+  const { data: client } = await supabase.from('clients').select('id, name, is_demo').eq('id', clientId).maybeSingle()
+  if (!client || client.is_demo) return
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
   await sendPushToUsers(supabase, adminGestorIds, {
@@ -203,10 +205,11 @@ async function dispatchClientAtRisk(supabase: SupabaseClient, clientId: string) 
 async function dispatchOverdueGoal(supabase: SupabaseClient, entityId: string) {
   const { data: goal } = await supabase
     .from('smart_goals')
-    .select('id, title, client_id, clients(name)')
+    .select('id, title, client_id, clients(name, is_demo)')
     .eq('id', entityId)
     .maybeSingle()
   if (!goal) return
+  if ((goal.clients as unknown as { is_demo?: boolean } | null)?.is_demo) return
   const clientName = (goal.clients as unknown as { name: string } | null)?.name ?? 'cliente'
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
@@ -221,10 +224,11 @@ async function dispatchOverdueGoal(supabase: SupabaseClient, entityId: string) {
 async function dispatchMeetingReminder(supabase: SupabaseClient, entityId: string, when: '1 hora' | '15 minutos') {
   const { data: meeting } = await supabase
     .from('meetings')
-    .select('id, title, client_id, clients(name)')
+    .select('id, title, client_id, clients(name, is_demo)')
     .eq('id', entityId)
     .maybeSingle()
   if (!meeting) return
+  if ((meeting.clients as unknown as { is_demo?: boolean } | null)?.is_demo) return
   const clientName = (meeting.clients as unknown as { name: string } | null)?.name ?? 'cliente'
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
@@ -244,8 +248,8 @@ async function dispatchMeetingReminder(supabase: SupabaseClient, entityId: strin
  * só admin/gestor recebe (diferente de dispatchMeetingReminder, que
  * também avisa o cliente). */
 async function dispatchRenewalReminder(supabase: SupabaseClient, entityId: string, when: '30 dias' | '7 dias' | '1 dia') {
-  const { data: client } = await supabase.from('clients').select('id, name').eq('id', entityId).maybeSingle()
-  if (!client) return
+  const { data: client } = await supabase.from('clients').select('id, name, is_demo').eq('id', entityId).maybeSingle()
+  if (!client || client.is_demo) return
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
   await sendPushToUsers(supabase, adminGestorIds, {
@@ -261,10 +265,11 @@ async function dispatchRenewalReminder(supabase: SupabaseClient, entityId: strin
 async function dispatchManagerAnalysisPublished(supabase: SupabaseClient, entityId: string) {
   const { data: analysis } = await supabase
     .from('manager_analyses')
-    .select('id, client_id, clients(name)')
+    .select('id, client_id, clients(name, is_demo)')
     .eq('id', entityId)
     .maybeSingle()
   if (!analysis) return
+  if ((analysis.clients as unknown as { is_demo?: boolean } | null)?.is_demo) return
   const clientName = (analysis.clients as unknown as { name: string } | null)?.name ?? 'seu gestor'
 
   const clientUserIds = await getClientUserIds(supabase, analysis.client_id as string)
@@ -280,8 +285,8 @@ async function dispatchManagerAnalysisPublished(supabase: SupabaseClient, entity
  * sem publicar nenhuma pro período corrente). Aviso interno, só
  * admin/gestor (mesmo padrão de dispatchRenewalReminder). */
 async function dispatchManagerAnalysisOverdue(supabase: SupabaseClient, clientId: string) {
-  const { data: client } = await supabase.from('clients').select('id, name').eq('id', clientId).maybeSingle()
-  if (!client) return
+  const { data: client } = await supabase.from('clients').select('id, name, is_demo').eq('id', clientId).maybeSingle()
+  if (!client || client.is_demo) return
 
   const adminGestorIds = await getAdminGestorUserIds(supabase)
   await sendPushToUsers(supabase, adminGestorIds, {

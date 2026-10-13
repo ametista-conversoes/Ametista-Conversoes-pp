@@ -15,6 +15,8 @@ import {
   clientProblemStatusStyle,
   clientStatusLabels,
   clientStatusStyles,
+  demoClientLabel,
+  demoClientStyle,
   getHealthScoreColor,
   planLabels,
 } from '@/lib/status-styles'
@@ -58,6 +60,7 @@ export function ClientCard({ client, hasProblems }: ClientCardProps) {
             <span className="truncate">{client.name}</span>
           </span>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {client.is_demo && <Badge className={demoClientStyle}>{demoClientLabel}</Badge>}
             {hasProblems && <Badge className={clientProblemStatusStyle}>{clientProblemStatusLabel}</Badge>}
             <DropdownMenu>
               <DropdownMenuTrigger asChild disabled={updateStatus.isPending} onClick={(e) => e.stopPropagation()}>

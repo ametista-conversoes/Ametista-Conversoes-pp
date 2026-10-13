@@ -89,6 +89,8 @@ import {
   clientStatusStyles,
   campaignStateLabels,
   connectionProviderLabels,
+  demoClientLabel,
+  demoClientStyle,
   getHealthScoreColor,
   meetingStatusLabels,
   meetingStatusStyles,
@@ -318,6 +320,8 @@ export default function ClientDetail() {
               className="h-8 text-sm text-muted-foreground"
             />
           </div>
+
+          {client.is_demo && <Badge className={demoClientStyle}>{demoClientLabel}</Badge>}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild disabled={updateStatus.isPending}>

@@ -107,6 +107,11 @@ export const clientStatusStyles: Record<string, string> = {
 export const clientProblemStatusStyle = 'border-orange-500/20 bg-orange-500/10 text-orange-400'
 export const clientProblemStatusLabel = 'Em problemas'
 
+// Fase 50.A — selo de cliente fictício de demonstração (is_demo), nos
+// 2 portais. Cor própria (índigo), distinta de status/plano/problemas.
+export const demoClientStyle = 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400'
+export const demoClientLabel = 'Demonstração'
+
 // Planos fixos do cliente (Fase 5.5) — chave estável salva no banco,
 // rótulo em português só existe aqui no front.
 export const planLabels: Record<string, string> = {

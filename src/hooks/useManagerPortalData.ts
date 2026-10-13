@@ -32,6 +32,9 @@ export interface ManagerClientRecord {
   /** Fase 31 — só relevante quando `plan === 'validacao'`. */
   chosen_platform: 'meta' | 'google' | null
   created_at: string
+  /** Fase 50.A — cliente fictício de demonstração: nunca entra nos KPIs
+   * da agência, nunca é tocado por sincronização real nem notificação. */
+  is_demo: boolean
 }
 
 export interface ManagerIncidentRecord {
