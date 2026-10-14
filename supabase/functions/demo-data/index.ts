@@ -118,6 +118,47 @@ async function ensureClinicaSorrisoShell(supabase: SupabaseClient): Promise<stri
   return created.id as string
 }
 
+/** Fase 50.D — a Loja Aurora é um cliente REAL (já existia antes desta
+ * fase, usado em dezenas de fases como conta de testes — nunca foi
+ * cliente pagante de verdade, confirmado com o usuário). Em vez de criar
+ * um cliente novo, reaproveita essa identidade: só liga `is_demo`, sem
+ * mexer em mais nada aqui (o resto do reset é feito por
+ * `remove_demo_data()`, chamado logo depois, já com a flag ligada).
+ * Devolve `null` se o cliente "Loja Aurora" não existir (ambiente sem
+ * esse cliente de teste) — nesse caso `seedLojaAurora` simplesmente não
+ * roda, sem erro. */
+async function ensureLojaAuroraDemoFlag(supabase: SupabaseClient): Promise<string | null> {
+  const { data, error } = await supabase.from('clients').select('id').eq('name', 'Loja Aurora').maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const { error: updateError } = await supabase.from('clients').update({ is_demo: true }).eq('id', data.id)
+  if (updateError) throw updateError
+  return data.id as string
+}
+
+/** Meses civis + semana corrente compartilhados pelos 2 geradores —
+ * extraído só agora (Fase 50.D) pra não arriscar mexer no código já
+ * testado de `seedClinicaSorriso`. */
+function resolveDemoMonths(todayISO: string) {
+  const today = new Date(`${todayISO}T00:00:00Z`)
+  const todayDay = today.getUTCDate()
+  const m3 = { year: today.getUTCFullYear(), month0: today.getUTCMonth() }
+  const m2d = new Date(Date.UTC(m3.year, m3.month0 - 1, 1))
+  const m1d = new Date(Date.UTC(m3.year, m3.month0 - 2, 1))
+  const m1 = { year: m1d.getUTCFullYear(), month0: m1d.getUTCMonth() }
+  const m2 = { year: m2d.getUTCFullYear(), month0: m2d.getUTCMonth() }
+  const m3Days = daysInMonth(m3.year, m3.month0)
+  const elapsed = todayDay / m3Days
+  function monthRange(year: number, month0: number) {
+    return { start: isoDate(new Date(Date.UTC(year, month0, 1))), end: isoDate(new Date(Date.UTC(year, month0 + 1, 0))) }
+  }
+  return { today, m1, m2, m3, todayDay, m3Days, elapsed, r1: monthRange(m1.year, m1.month0), r2: monthRange(m2.year, m2.month0), r3: monthRange(m3.year, m3.month0) }
+}
+
+function brl(n: number): string {
+  return `R$ ${Math.round(n).toLocaleString('pt-BR')}`
+}
+
 // ===================== Fase 50.C — Clínica Sorriso =====================
 // Gera ~3 meses civis de operação sintética (o mês corrente, parcial, +
 // os 2 anteriores, fechados) + alguns dias do mês seguinte (bem leves),
@@ -789,12 +830,423 @@ async function seedClinicaSorriso(supabase: SupabaseClient, clientId: string, to
   ])
 }
 
-/** Fase 50.D (ainda não construída): vai converter a Loja Aurora REAL já
- * existente em cliente demo (is_demo=true, plano Dominação) e popular o
- * cenário de 90 dias dela. De propósito NÃO toca a Loja Aurora ainda —
- * decisão do usuário (10/10), esperar essa sub-fase antes de mexer nela. */
-async function seedLojaAurora(_supabase: SupabaseClient, _today: string): Promise<void> {
-  // TODO Fase 50.D
+// ===================== Fase 50.D — Loja Aurora =====================
+// Dominação, Meta + Google Ads, vendas (e-commerce). Mesmos 3 meses
+// civis da Clínica Sorriso (compartilham o "hoje" da mesma chamada de
+// /recreate). `leads_to_close = 1` é a chave pra Receita bater com
+// "receita vindo de valor de conversão": a fórmula do app é sempre
+// `(conversões ÷ leads_to_close) × ticket médio` — com leads_to_close=1,
+// cada conversão rastreada já é tratada como 1 venda direta, igual um
+// e-commerce de verdade funciona (sem fração de fechamento por lead).
+async function seedLojaAurora(supabase: SupabaseClient, clientId: string, todayISO: string): Promise<void> {
+  const { m1, m2, m3, todayDay, elapsed, r1, r2, r3 } = resolveDemoMonths(todayISO)
+
+  await supabase
+    .from('clients')
+    .update({
+      plan: 'dominacao',
+      chosen_platform: null,
+      leads_to_close: 1,
+      average_ticket: 210,
+      health_score: 58,
+      health_performance: 55,
+      health_financial: 65,
+      health_delivery: 60,
+      health_relationship: 52,
+    })
+    .eq('id', clientId)
+
+  // ---- Ativos + conexões (Google Ads + Meta Ads, sintéticas) ----
+  const { data: googleAsset, error: gaErr } = await supabase
+    .from('digital_assets')
+    .insert({ name: 'Google Ads — Loja Aurora', client_id: clientId, type: 'ad_account', platform: 'google_ads', status: 'active' })
+    .select('id')
+    .single()
+  if (gaErr) throw gaErr
+  const { data: googleConn, error: gcErr } = await supabase
+    .from('digital_asset_connections')
+    .insert({ digital_asset_id: googleAsset.id, provider: 'google_ads', status: 'connected', external_account_id: '999-demo-aurora', external_account_name: 'Loja Aurora — Google Ads', last_synced_at: new Date().toISOString() })
+    .select('id')
+    .single()
+  if (gcErr) throw gcErr
+
+  const { data: metaAsset, error: maErr } = await supabase
+    .from('digital_assets')
+    .insert({ name: 'Meta Ads — Loja Aurora', client_id: clientId, type: 'ad_account', platform: 'meta_ads', status: 'active' })
+    .select('id')
+    .single()
+  if (maErr) throw maErr
+  const { data: metaConn, error: mcErr } = await supabase
+    .from('digital_asset_connections')
+    .insert({ digital_asset_id: metaAsset.id, provider: 'meta_ads', status: 'connected', external_account_id: 'act_demo_aurora', external_account_name: 'Loja Aurora — Meta Ads', last_synced_at: new Date().toISOString() })
+    .select('id')
+    .single()
+  if (mcErr) throw mcErr
+
+  // ---- Projeto ----
+  const { data: project, error: projectErr } = await supabase
+    .from('projects')
+    .insert({
+      title: 'E-commerce — Meta + Google Ads',
+      client_id: clientId,
+      status: 'active',
+      platform: 'meta_ads',
+      conversion_type: 'vendas',
+      test_type: 'nenhum',
+      objective: 'Maximizar vendas no e-commerce com ROAS saudável, combinando Google Pesquisa/Performance Max e Meta prospecção/remarketing.',
+      systems: 'Google Ads + Meta Ads + Catálogo de produtos + Pixel/Tag de conversão',
+      segmentations: ['Mulheres 25-45 anos', 'Interesse em moda e acessórios', 'Lookalike 1% de compradores'],
+      start_date: isoDate(new Date(Date.UTC(m1.year, m1.month0, 1))),
+    })
+    .select('id')
+    .single()
+  if (projectErr) throw projectErr
+
+  // ---- Campanhas (2 Google + 2 Meta, um projeto só) ----
+  const campaignDefs = [
+    { id: 'demo-aurora-google-pesquisa', name: 'Pesquisa — Marca + Genéricas', connId: googleConn.id, channel: 'google_ads', campaignType: 'SEARCH', shareM1M2: 0.35, shareM3: 0.3, cpa: [40, 36, 33] },
+    { id: 'demo-aurora-google-pmax', name: 'Performance Max — Catálogo Completo', connId: googleConn.id, channel: 'google_ads', campaignType: 'PERFORMANCE_MAX', shareM1M2: 0.25, shareM3: 0.25, cpa: [45, 41, 37] },
+    { id: 'demo-aurora-meta-prospeccao', name: 'Prospecção — Moda e Acessórios', connId: metaConn.id, channel: 'meta_ads', campaignType: 'SALES', shareM1M2: 0.25, shareM3: 0.3, cpa: [55, 50, 45] },
+    { id: 'demo-aurora-meta-remarketing', name: 'Remarketing — Catálogo Dinâmico', connId: metaConn.id, channel: 'meta_ads', campaignType: 'SALES', shareM1M2: 0.15, shareM3: 0.15, cpa: [30, 27, 24] },
+  ]
+  const linkIds: Record<string, string> = {}
+  for (const c of campaignDefs) {
+    const { data: link, error: linkErr } = await supabase
+      .from('project_campaign_links')
+      .insert({ project_id: project.id, connection_id: c.connId, external_campaign_id: c.id, external_campaign_name: c.name, last_known_status: 'ENABLED' })
+      .select('id')
+      .single()
+    if (linkErr) throw linkErr
+    linkIds[c.id] = link.id as string
+  }
+
+  // ---- Série diária: nível cliente ----
+  // Meses 1-2: dentro da verba incluída do plano Dominação (R$90mil).
+  // Mês corrente: investimento deliberadamente alto, projetando acima
+  // de R$90mil pro aviso de "Ritmo de verba" aparecer na Análise.
+  const SPEND_M1 = 16000
+  const SPEND_M2 = 18000
+  const SPEND_M3_PROJECTED = 96000
+  const clientM1 = buildDailySeries(m1.year, m1.month0, SPEND_M1, 47, 0)
+  const clientM2 = buildDailySeries(m2.year, m2.month0, SPEND_M2, 42, 0)
+  const clientM3 = buildDailySeries(m3.year, m3.month0, Math.round(SPEND_M3_PROJECTED * elapsed), 38, 0, todayDay)
+  const clientDays = [...clientM1, ...clientM2, ...clientM3]
+
+  await insertInChunks(
+    supabase,
+    'performance_snapshots',
+    clientDays
+      .filter((d) => d.spend > 0)
+      .map((d) => ({ client_id: clientId, project_id: project.id, snapshot_date: d.date, channel: 'meta_ads', spend: d.spend, clicks: d.clicks, impressions: d.impressions, conversions: d.conversions })),
+  )
+  await supabase.rpc('generate_monthly_client_reports', { p_ref_month: r1.start })
+  await supabase.rpc('generate_monthly_client_reports', { p_ref_month: r2.start })
+
+  // ---- Série diária por campanha + impressão perdida (só Pesquisa) ----
+  const campaignRows: Record<string, unknown>[] = []
+  for (const c of campaignDefs) {
+    const days = [
+      ...buildDailySeries(m1.year, m1.month0, SPEND_M1 * c.shareM1M2, c.cpa[0], 0),
+      ...buildDailySeries(m2.year, m2.month0, SPEND_M2 * c.shareM1M2, c.cpa[1], 0),
+      ...buildDailySeries(m3.year, m3.month0, Math.round(SPEND_M3_PROJECTED * c.shareM3 * elapsed), c.cpa[2], 0, todayDay),
+    ]
+    for (const d of days) {
+      if (d.spend <= 0) continue
+      campaignRows.push({
+        connection_id: c.connId,
+        external_campaign_id: c.id,
+        external_campaign_name: c.name,
+        client_id: clientId,
+        channel: c.channel,
+        snapshot_date: d.date,
+        spend: d.spend,
+        clicks: d.clicks,
+        impressions: d.impressions,
+        conversions: d.conversions,
+        campaign_type: c.campaignType,
+        campaign_status: 'ENABLED',
+        ...(c.campaignType === 'SEARCH'
+          ? { search_rank_lost_impression_share: round2(randBetween(12, 26)), search_budget_lost_impression_share: round2(randBetween(3, 11)) }
+          : {}),
+      })
+    }
+  }
+  await insertInChunks(supabase, 'campaign_performance_snapshots', campaignRows)
+
+  // ---- "Grupos de Anúncios"/"Campanha" (Fase 50.C.1) — registro, não
+  // chamada ao vivo. Keywords/termos/geo/dispositivo só fazem sentido
+  // pras 2 campanhas do Google (a de Pesquisa fica completa; a PMax só
+  // com dispositivo/geo/conversão, sem keyword — igual uma PMax real). ----
+  function adGroup(id: string, name: string, spend: number, clicks: number, impressions: number, conversions: number, quality: number | null) {
+    return { id, name, status: 'ACTIVE', spend: round2(spend), clicks, impressions, conversions, avgQualityScore: quality }
+  }
+  const searchInsights = {
+    devices: [
+      { device: 'MOBILE', spend: 9800, clicks: 2100, impressions: 48000, conversions: 180 },
+      { device: 'DESKTOP', spend: 5200, clicks: 980, impressions: 19000, conversions: 95 },
+      { device: 'TABLET', spend: 900, clicks: 160, impressions: 4200, conversions: 12 },
+    ],
+    topSearchTerms: [
+      { term: 'loja aurora roupas femininas', clicks: 340, impressions: 2100, conversions: 28 },
+      { term: 'vestido feminino online', clicks: 210, impressions: 1800, conversions: 15 },
+      { term: 'acessórios femininos loja online', clicks: 150, impressions: 1200, conversions: 9 },
+    ],
+    topKeywords: [
+      { keyword: 'loja aurora', clicks: 420, impressions: 1900, conversions: 38 },
+      { keyword: 'vestido feminino', clicks: 260, impressions: 2400, conversions: 17 },
+      { keyword: 'acessórios femininos online', clicks: 180, impressions: 1700, conversions: 11 },
+    ],
+    geoBreakdown: [
+      { name: 'São Paulo, SP', clicks: 980, impressions: 12000, conversions: 92 },
+      { name: 'Rio de Janeiro, RJ', clicks: 410, impressions: 5200, conversions: 34 },
+      { name: 'Belo Horizonte, MG', clicks: 230, impressions: 2900, conversions: 18 },
+    ],
+    conversionBreakdown: [{ actionName: 'Compra', conversions: 287, conversionValue: 60270 }],
+    ageRanges: [
+      { range: '25-34', clicks: 1200, impressions: 22000, conversions: 110 },
+      { range: '35-44', clicks: 980, impressions: 19000, conversions: 95 },
+      { range: '45-54', clicks: 420, impressions: 9000, conversions: 32 },
+    ],
+    genders: [
+      { gender: 'FEMALE', clicks: 2400, impressions: 48000, conversions: 240 },
+      { gender: 'MALE', clicks: 500, impressions: 11000, conversions: 35 },
+    ],
+    bestTiming: { dayOfWeek: 'QUARTA', hourBucket: '19-21' },
+  }
+  await insertInChunks(supabase, 'demo_campaign_details', [
+    {
+      connection_id: googleConn.id,
+      external_campaign_id: 'demo-aurora-google-pesquisa',
+      ad_groups: [adGroup('demo-adset-pesquisa-marca', 'Marca — Loja Aurora', 6500, 1400, 9800, 140, 8.4), adGroup('demo-adset-pesquisa-generica', 'Genéricas — Moda Feminina', 9400, 1840, 61400, 147, 6.1)],
+      insights: searchInsights,
+    },
+    {
+      connection_id: googleConn.id,
+      external_campaign_id: 'demo-aurora-google-pmax',
+      ad_groups: [adGroup('demo-adset-pmax-1', 'Grupo de recursos — Catálogo completo', 11200, 2100, 88000, 232, null)],
+      insights: {
+        devices: [
+          { device: 'MOBILE', spend: 7800, clicks: 1500, impressions: 62000, conversions: 165 },
+          { device: 'DESKTOP', spend: 3400, clicks: 600, impressions: 26000, conversions: 67 },
+        ],
+        topSearchTerms: [],
+        topKeywords: [],
+        geoBreakdown: [
+          { name: 'São Paulo, SP', clicks: 820, impressions: 32000, conversions: 98 },
+          { name: 'Curitiba, PR', clicks: 310, impressions: 14000, conversions: 34 },
+        ],
+        conversionBreakdown: [{ actionName: 'Compra', conversions: 232, conversionValue: 48720 }],
+        ageRanges: [],
+        genders: [],
+        bestTiming: null,
+      },
+    },
+    {
+      connection_id: metaConn.id,
+      external_campaign_id: 'demo-aurora-meta-prospeccao',
+      ad_groups: [adGroup('demo-adset-prosp-1', 'Interesse — Moda e Acessórios', 7200, 2400, 180000, 131, null), adGroup('demo-adset-prosp-2', 'Lookalike 1% — Compradores', 5800, 1850, 140000, 105, null)],
+      insights: {},
+    },
+    {
+      connection_id: metaConn.id,
+      external_campaign_id: 'demo-aurora-meta-remarketing',
+      ad_groups: [adGroup('demo-adset-remkt-1', 'Catálogo dinâmico — Visitantes 30 dias', 7800, 2600, 95000, 325, null)],
+      insights: {},
+    },
+  ])
+
+  // ---- Metas SMART ----
+  const lastDay3 = r3.end
+  await insertInChunks(supabase, 'smart_goals', [
+    { title: 'Manter ROAS acima de 4,5', client_id: clientId, metric_type: 'roas', target_value: 4.5, current_value: 5.2, target_date: lastDay3, status: 'on_track' },
+    { title: 'CPA médio abaixo de R$45', client_id: clientId, metric_type: 'cpa', target_value: 45, current_value: 41, target_date: lastDay3, status: 'on_track' },
+    { title: 'Faturamento de R$95.000 no mês', client_id: clientId, metric_type: 'faturamento', target_value: 95000, current_value: Math.round(95000 * elapsed), target_date: lastDay3, status: 'at_risk' },
+  ])
+
+  // ---- Catálogo (leve — não é o foco do pedido pra esse cliente) ----
+  await insertInChunks(supabase, 'catalog_entries', [
+    { client_id: clientId, catalog_type: 'criativo', tipo: 'video', conteudo: 'Vídeo — nova coleção, modelo usando 3 looks', origem: 'manual', status: 'aprovado_implementado', prioridade: 'alta', rating: 5 },
+    { client_id: clientId, catalog_type: 'criativo', tipo: 'headline', conteudo: 'Nova coleção chegou — frete grátis', origem: 'ia', status: 'aprovado_implementado', prioridade: 'alta', rating: 4 },
+    { client_id: clientId, catalog_type: 'criativo', tipo: 'headline', conteudo: 'Até 30% off essa semana', origem: 'manual', status: 'em_teste', prioridade: 'media', rating: null },
+    { client_id: clientId, catalog_type: 'segmentacao', tipo: null, conteudo: 'Lookalike 1% — compradores últimos 180 dias', origem: 'manual', status: 'aprovado_implementado', prioridade: 'alta', rating: null },
+  ])
+
+  // ---- Workflows (leve) ----
+  await insertInChunks(supabase, 'tasks', [
+    { title: 'Atualizar feed do catálogo (Google Merchant Center)', client_id: clientId, project_id: project.id, category: 'Gestão de tráfego', priority: 'high', status: 'done', due_date: r2.start },
+    { title: 'Revisar públicos com fadiga de anúncio', client_id: clientId, project_id: project.id, category: 'Gestão de tráfego', priority: 'medium', status: 'done', due_date: r2.start },
+    { title: 'Ajustar orçamento pro pico de investimento do mês', client_id: clientId, project_id: project.id, category: 'Gestão de tráfego', priority: 'high', status: 'in_progress', due_date: r3.start },
+  ])
+
+  // ---- Análise do Gestor: 12 semanais (curta) + 3 estratégicas mensais ----
+  function mondayOf(d: Date): Date {
+    const dow = d.getUTCDay()
+    const diff = (dow + 6) % 7
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diff))
+  }
+  const thisMonday = mondayOf(new Date(`${todayISO}T00:00:00Z`))
+  const weeks: { start: string; end: string }[] = []
+  for (let w = 11; w >= 0; w--) {
+    const start = new Date(Date.UTC(thisMonday.getUTCFullYear(), thisMonday.getUTCMonth(), thisMonday.getUTCDate() - w * 7))
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 6))
+    weeks.push({ start: isoDate(start), end: isoDate(end) })
+  }
+
+  const alertPool = [
+    'Nenhum anúncio com sinal de fadiga essa semana.',
+    'Criativo "Remarketing — vídeo 1" com frequência subindo, já marcado pra troca na próxima rodada.',
+    'CPA da Pesquisa subiu levemente, dentro da variação normal — sem ação necessária.',
+    'Público lookalike 1% com CTR acima da média, aumentamos o orçamento dele.',
+    'Campanha Performance Max estabilizou depois do último ajuste do feed.',
+    'Anúncio principal da Prospecção começando a saturar — novo criativo entra semana que vem.',
+  ]
+  const weeklyRows: Record<string, unknown>[] = []
+  weeks.forEach((w, idx) => {
+    const weekDays = clientDays.filter((d) => d.date >= w.start && d.date <= w.end)
+    const spend = weekDays.reduce((s, d) => s + d.spend, 0)
+    const conversions = weekDays.reduce((s, d) => s + d.conversions, 0)
+    const revenue = conversions * 210
+    const roas = spend > 0 ? revenue / spend : 0
+    weeklyRows.push({
+      client_id: clientId,
+      period_start: w.start,
+      period_end: w.end,
+      tipo: 'periodica',
+      status: 'publicada',
+      published_at: new Date(new Date(`${w.end}T18:00:00Z`).getTime()).toISOString(),
+      resumo: `Semana ${idx + 1}/12: investimento de ${brl(spend)}, ${conversions} vendas, ROAS ${roas.toFixed(1)}.`,
+      diagnostico: roas >= 4.5 ? 'Semana dentro da meta, sem alerta crítico.' : 'Semana um pouco abaixo da média, acompanhando de perto antes de ajustar.',
+      otimizacoes_realizadas: 'Revisão de lances e públicos conforme o ritmo da semana.',
+      creatives_used_snapshot: Math.min(15, 3 + (idx % 4)),
+      changes_used_snapshot: Math.min(12, 2 + (idx % 3)),
+      proximos_passos: [{ titulo: 'Acompanhar ritmo de verba e CPA na próxima semana', data: null }],
+      pendencias_cliente_texto: null,
+      extra_fields: { alertas: alertPool[idx % alertPool.length] },
+    })
+  })
+  await insertInChunks(supabase, 'manager_analyses', weeklyRows)
+
+  const monthlyStrategicRows = [
+    {
+      client_id: clientId,
+      period_start: r1.start,
+      period_end: r1.end,
+      tipo: 'estrategica_mensal',
+      status: 'publicada',
+      published_at: new Date(Date.UTC(m1.year, m1.month0 + 1, 3)).toISOString(),
+      resumo: `Mês estável: ${brl(SPEND_M1)} investidos, ROAS acima de 4,5. Iniciamos o planejamento de pós-venda.`,
+      diagnostico: 'Mix Google/Meta equilibrado, CPA dentro da meta nas 2 plataformas. Primeiros passos de pós-venda (mensagens de reativação no WhatsApp) desenhados, entram em operação no mês 2.',
+      otimizacoes_realizadas: 'Revisão de públicos de prospecção, ajuste de lance na Pesquisa.',
+      creatives_used_snapshot: 6,
+      changes_used_snapshot: 5,
+      proximos_passos: [
+        { titulo: 'Ativar mensagens de pós-venda/reativação (LTV)', data: r2.start },
+        { titulo: 'Testar aumento gradual de verba na Performance Max', data: r2.start },
+      ],
+      pendencias_cliente_texto: null,
+      extra_fields: {
+        concorrencia: 'Dois concorrentes diretos aumentaram investimento em mídia paga no período — acompanhando impacto no CPC.',
+        parcela_impressoes_perdida: 'Pesquisa perdendo ~15-20% de impressão por posição (orçamento suficiente, falta de lance em termos de cauda longa).',
+        cenario_escala: 'Espaço pra aumentar verba em Performance Max sem perder eficiência, dado o volume de catálogo.',
+        riscos: 'Nenhum risco crítico identificado no período.',
+      },
+    },
+    {
+      client_id: clientId,
+      period_start: r2.start,
+      period_end: r2.end,
+      tipo: 'estrategica_mensal',
+      status: 'publicada',
+      published_at: new Date(Date.UTC(m2.year, m2.month0 + 1, 3)).toISOString(),
+      resumo: `Mês de consolidação: ${brl(SPEND_M2)} investidos, ROAS em torno de 5. Pós-venda ativo, primeiras reativações confirmadas.`,
+      diagnostico: 'Mensagens de pós-venda/reativação (LTV) no WhatsApp Business já em operação, com primeiras recompras atribuídas. Performance Max absorveu bem o aumento de verba testado no fim do mês 1.',
+      otimizacoes_realizadas: 'Aumento de verba em Performance Max, novo criativo de vídeo na Remarketing, ativação do fluxo de pós-venda.',
+      creatives_used_snapshot: 8,
+      changes_used_snapshot: 7,
+      proximos_passos: [
+        { titulo: 'Avaliar aumento de verba geral pro mês 3', data: r3.start },
+        { titulo: 'Expandir lookalike de compradores recorrentes', data: r3.start },
+      ],
+      pendencias_cliente_texto: null,
+      extra_fields: {
+        concorrencia: 'Concorrência estabilizou o investimento — sem pressão adicional de CPC no período.',
+        parcela_impressoes_perdida: 'Pesquisa reduziu a perda por posição pra ~10-14%, depois do ajuste de lance.',
+        cenario_escala: 'Cenário positivo pra escalar verba no mês 3, mantendo o ROAS acima de 4,5.',
+        riscos: 'Dependência alta da Performance Max — vale diversificar com mais uma frente no Google.',
+      },
+    },
+    {
+      client_id: clientId,
+      period_start: r3.start,
+      period_end: r3.end,
+      tipo: 'estrategica_mensal',
+      status: 'publicada',
+      published_at: new Date().toISOString(),
+      resumo: `Mês de escala: investimento projetado acima da verba incluída no plano (~${brl(SPEND_M3_PROJECTED)}), com aprovação prévia pendente de confirmação formal do cliente.`,
+      diagnostico: 'Resultado justificou o aumento de verba (ROAS seguindo acima de 5) — o "Ritmo de verba" já avisou que o mês vai passar da verba gerenciada incluída no plano Dominação (R$90.000), então o modificador do Anexo I se aplica, mediante aprovação prévia por escrito.',
+      otimizacoes_realizadas: 'Aumento de verba em todas as 4 campanhas, priorizando Pesquisa e Prospecção (maior ROAS marginal).',
+      creatives_used_snapshot: 11,
+      changes_used_snapshot: 9,
+      proximos_passos: [
+        { titulo: 'Confirmar aprovação formal do aumento de verba com o cliente', data: isoDate(new Date(Date.UTC(m3.year, m3.month0 + 1, 2))) },
+        { titulo: 'Planejar cenário de escala pro próximo trimestre', data: isoDate(new Date(Date.UTC(m3.year, m3.month0 + 1, 10))) },
+      ],
+      pendencias_cliente_texto: 'Confirmar por escrito a aprovação do investimento acima da verba incluída (cláusula 4.6 do Anexo I).',
+      extra_fields: {
+        concorrencia: 'Sazonalidade favorável no setor — todos os concorrentes aumentando investimento, janela de oportunidade.',
+        parcela_impressoes_perdida: 'Pesquisa voltou a perder impressão por orçamento (~8-12%) depois do aumento de demanda — espaço real pra crescer mais.',
+        cenario_escala: 'Cenário de escala agressiva válido enquanto o ROAS seguir acima de 4,5 — monitorar semana a semana.',
+        riscos: 'Risco de fadiga de público em Prospecção se o ritmo de aumento continuar no próximo mês sem diversificar criativo.',
+      },
+    },
+  ]
+  await insertInChunks(supabase, 'manager_analyses', monthlyStrategicRows)
+
+  // ---- Reuniões semanais + 1 de emergência usada no mês ----
+  // Nota: `is_emergency` precisa estar em TODAS as linhas (mesmo tendo
+  // default false no banco) — o mesmo comportamento do PostgREST já
+  // achado no insert de `approvals` na Fase 50.C: chave ausente numa
+  // linha do array vira NULL explícito, não o default da coluna.
+  const meetingRows: Record<string, unknown>[] = weeks.map((w, idx) => ({
+    title: `Reunião semanal — semana ${idx + 1}/12`,
+    client_id: clientId,
+    date: new Date(`${w.start}T15:00:00Z`).toISOString(),
+    meeting_link: 'https://meet.google.com/demo-aurora-semanal',
+    status: idx < 11 ? 'completed' : 'scheduled',
+    is_emergency: false,
+  }))
+  meetingRows.push({
+    title: 'Reunião de Emergência — pico de investimento do mês',
+    client_id: clientId,
+    date: new Date(`${r3.start}T11:00:00Z`).toISOString(),
+    meeting_link: 'https://meet.google.com/demo-aurora-emergencia',
+    status: 'completed',
+    is_emergency: true,
+  })
+  await insertInChunks(supabase, 'meetings', meetingRows)
+
+  // ---- Comentários ----
+  await insertInChunks(supabase, 'comments', [
+    { title: null, content: 'Time, o investimento desse mês vai passar da verba incluída no plano — já alinhado com vocês o motivo (sazonalidade boa). Só preciso da aprovação formal por escrito.', client_id: clientId, entity_type: 'general', entity_id: clientId, author_name: 'Davi (Gestor)', author_role: 'gestor' },
+    { title: null, content: 'Aprovado! Pode seguir com o aumento, os números estão muito bons.', client_id: clientId, entity_type: 'general', entity_id: clientId, author_name: 'Loja Aurora', author_role: 'cliente' },
+  ])
+
+  // ---- Arquivos + aprovações ----
+  await insertInChunks(supabase, 'file_items', [{ name: 'Catálogo_NovaColecao.pdf', client_id: clientId, folder: 'Criativos', file_url: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Example.pdf', file_type: 'application/pdf' }])
+  await insertInChunks(supabase, 'approvals', [
+    { title: 'Vídeo — nova coleção (3 looks)', client_id: clientId, file_url: 'https://picsum.photos/seed/aurora-video/1280/720', file_type: 'video/mp4', status: 'approved', feedback: 'Aprovado!', requires_explicit_approval: false },
+  ])
+
+  // ---- Health Score em atenção + 1 alerta aberto (problema real,
+  // ainda não resolvido — mostra como ele aparece antes de ser tratado) ----
+  await insertInChunks(supabase, 'metric_alert_thresholds', [{ client_id: clientId, metric: 'cpa', comparison: 'above', threshold_value: 50, enabled: true }])
+  await insertInChunks(supabase, 'alerts', [
+    { title: 'CPA acima do limite configurado', message: `CPA nos últimos 7 dias acima de R$50 na campanha de Prospecção — verificar fadiga de público.`, client_id: clientId, severity: 'medium', category: 'limiar_metrica', resolved: false },
+  ])
+  await insertInChunks(supabase, 'client_health_score_snapshots', [
+    { client_id: clientId, snapshot_date: r2.start, health_score: 64 },
+    { client_id: clientId, snapshot_date: todayISO, health_score: 58 },
+  ])
 }
 
 async function handleRecreate(req: Request) {
@@ -803,21 +1255,27 @@ async function handleRecreate(req: Request) {
 
   const supabase = getServiceClient()
 
+  // Marca os 2 clientes demo ANTES de limpar, pra remove_demo_data()
+  // já pegar tudo de uma vez — inclusive o histórico de teste antigo da
+  // Loja Aurora, na 1ª conversão dela (confirmado com o usuário: ela
+  // nunca foi um cliente real, só uma conta de testes — seguro limpar).
+  let lojaAuroraId: string | null
+  let clinicaSorrisoId: string
+  try {
+    lojaAuroraId = await ensureLojaAuroraDemoFlag(supabase)
+    clinicaSorrisoId = await ensureClinicaSorrisoShell(supabase)
+  } catch (err) {
+    return dbErrorResponse('handleRecreate: garantir clientes demo', err as { message: string })
+  }
+
   const { error: removeError } = await supabase.rpc('remove_demo_data')
   if (removeError) return dbErrorResponse('handleRecreate: remover dado antigo', removeError)
 
-  let clinicaSorrisoId: string
-  try {
-    clinicaSorrisoId = await ensureClinicaSorrisoShell(supabase)
-  } catch (err) {
-    return dbErrorResponse('handleRecreate: garantir cliente Clínica Sorriso (demo)', err as { message: string })
-  }
-
   const today = new Date().toISOString().slice(0, 10)
   await seedClinicaSorriso(supabase, clinicaSorrisoId, today)
-  await seedLojaAurora(supabase, today)
+  if (lojaAuroraId) await seedLojaAurora(supabase, lojaAuroraId, today)
 
-  return jsonResponse({ ok: true, clinicaSorrisoId })
+  return jsonResponse({ ok: true, clinicaSorrisoId, lojaAuroraId })
 }
 
 async function handleRemove(req: Request) {
