@@ -5,8 +5,12 @@
 // duplicado aqui de propósito — cada Edge Function deste projeto é
 // autocontida, sem import cruzado entre funções):
 //   POST .../demo-data/recreate — apaga e gera de novo os 2 clientes de
-//                                 demonstração, com datas relativas a hoje
-//   POST .../demo-data/remove   — só apaga (não gera de novo)
+//                                 demonstração, com datas relativas a hoje.
+//                                 Também garante (Fase 50.E) o login do
+//                                 Portal do Cliente de cada um — idempotente,
+//                                 não duplica a conta em recriações seguidas.
+//   POST .../demo-data/remove   — só apaga (não gera de novo); não toca
+//                                 nos logins (ver comentário em remove_demo_data)
 //
 // Chamadas só pelo botão em Configurações > Globais (admin), nunca por
 // cron nem webhook externo.
@@ -80,6 +84,7 @@ async function requireAdminOrGestor(req: Request): Promise<{ userId: string; rol
 }
 
 const CLINICA_SORRISO_NAME = 'Clínica Sorriso (demo)'
+const CLINICA_SORRISO_EMAIL = 'contato@clinicasorriso.com.br'
 
 /** Cria (ou atualiza, se já existir) o cliente-molde da Clínica Sorriso
  * — procurado por nome porque é sempre o mesmo cliente sintético, nunca
@@ -96,7 +101,7 @@ async function ensureClinicaSorrisoShell(supabase: SupabaseClient): Promise<stri
   if (existing) {
     const { error: updateError } = await supabase
       .from('clients')
-      .update({ is_demo: true, status: 'active', plan: 'validacao', chosen_platform: 'meta' })
+      .update({ is_demo: true, status: 'active', plan: 'validacao', chosen_platform: 'meta', email: CLINICA_SORRISO_EMAIL })
       .eq('id', existing.id)
     if (updateError) throw updateError
     return existing.id as string
@@ -107,6 +112,7 @@ async function ensureClinicaSorrisoShell(supabase: SupabaseClient): Promise<stri
     .insert({
       name: CLINICA_SORRISO_NAME,
       company: 'Clínica Sorriso Odontologia',
+      email: CLINICA_SORRISO_EMAIL,
       is_demo: true,
       status: 'active',
       plan: 'validacao',
@@ -134,6 +140,69 @@ async function ensureLojaAuroraDemoFlag(supabase: SupabaseClient): Promise<strin
   const { error: updateError } = await supabase.from('clients').update({ is_demo: true }).eq('id', data.id)
   if (updateError) throw updateError
   return data.id as string
+}
+
+// Fase 50.E — senha fixa pros 2 logins de demonstração. NUNCA um literal
+// aqui no código (que é versionado e vai pro GitHub) — vem de um secret
+// de Edge Function (Supabase > Edge Functions > Secrets), o mesmo
+// mecanismo já usado por SUPABASE_SERVICE_ROLE_KEY/FRONTEND_URL acima.
+// O valor em si só existe no secret e no arquivo local
+// docs/interno/credenciais-demo.local.md (fora do git). Resetada em TODO
+// "Recriar", pra garantir que a credencial documentada sempre funcione
+// mesmo que alguém tenha mudado a senha testando.
+function getDemoLoginPassword(): string {
+  const password = Deno.env.get('DEMO_LOGIN_PASSWORD')
+  if (!password) throw new Error('Secret DEMO_LOGIN_PASSWORD não configurado nesta Edge Function')
+  return password
+}
+
+/** Garante o login do Portal do Cliente de um cliente demo: se já existe
+ * uma conta com esse e-mail, só vincula (client_id + role + full_name) e
+ * reseta a senha pra garantir que o valor documentado sempre funcione;
+ * se não existe, cria direto via `admin.createUser` (sem convite por
+ * e-mail — diferente de `client-access/handleLink`, não faz sentido
+ * mandar e-mail de convite pra uma conta de demonstração). O gatilho
+ * `handle_new_user` já cria a linha em profiles com role padrão
+ * 'cliente' e o full_name do metadata — só falta o client_id. */
+async function ensureDemoClientUser(
+  supabase: SupabaseClient,
+  clientId: string,
+  email: string,
+  fullName: string,
+): Promise<void> {
+  const password = getDemoLoginPassword()
+
+  const { data: existingProfile, error: findError } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('email', email)
+    .maybeSingle()
+  if (findError) throw findError
+
+  if (existingProfile) {
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ client_id: clientId, role: 'cliente', full_name: fullName })
+      .eq('id', existingProfile.id)
+    if (updateError) throw updateError
+    const { error: pwError } = await supabase.auth.admin.updateUserById(existingProfile.id, {
+      password,
+      email_confirm: true,
+    })
+    if (pwError) throw pwError
+    return
+  }
+
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
+  })
+  if (createError || !created?.user) throw createError ?? new Error('createUser sem usuário')
+
+  const { error: linkError } = await supabase.from('profiles').update({ client_id: clientId }).eq('id', created.user.id)
+  if (linkError) throw linkError
 }
 
 /** Meses civis + semana corrente compartilhados pelos 2 geradores —
@@ -1274,6 +1343,15 @@ async function handleRecreate(req: Request) {
   const today = new Date().toISOString().slice(0, 10)
   await seedClinicaSorriso(supabase, clinicaSorrisoId, today)
   if (lojaAuroraId) await seedLojaAurora(supabase, lojaAuroraId, today)
+
+  // Fase 50.E — login do Portal do Cliente pros 2 clientes demo (senha
+  // fixa documentada fora do git, ver docs/interno/credenciais-demo.local.md).
+  try {
+    await ensureDemoClientUser(supabase, clinicaSorrisoId, 'demo@clinicasorriso.com.br', 'Fernanda Lima')
+    if (lojaAuroraId) await ensureDemoClientUser(supabase, lojaAuroraId, 'demo@lojaaurora.com', 'Rafael Costa')
+  } catch (err) {
+    return dbErrorResponse('handleRecreate: garantir login dos clientes demo', err as { message: string })
+  }
 
   return jsonResponse({ ok: true, clinicaSorrisoId, lojaAuroraId })
 }
