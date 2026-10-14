@@ -220,30 +220,126 @@ interface ClientContextRow {
   company: string | null
   plan: string | null
   health_score: number | null
+  leads_to_close: number | null
+  average_ticket: number | null
 }
 
 async function fetchClient(supabase: SupabaseClient, clientId: string): Promise<ClientContextRow | null> {
-  const { data } = await supabase.from('clients').select('name, company, plan, health_score').eq('id', clientId).single()
+  const { data } = await supabase
+    .from('clients')
+    .select('name, company, plan, health_score, leads_to_close, average_ticket')
+    .eq('id', clientId)
+    .single()
   return data as ClientContextRow | null
 }
 
-function computeConversions(projects: Array<{ cpa: number | null; spend: number | null }>): number {
-  return projects.reduce((sum, p) => {
-    if (!p.cpa || p.cpa <= 0 || !p.spend) return sum
-    return sum + p.spend / p.cpa
-  }, 0)
+// Fase 50 (achado durante o roteiro de demonstração): `projects.cpa/
+// roas/ctr/spend/revenue` só têm valor quando alguém edita manualmente
+// ("editar manualmente" no projeto) — nenhum fluxo real de sincronização
+// (`integrations/index.ts: syncConnection`) grava neles, e o mesmo vale
+// pra `performance_snapshots.revenue/roas/ctr`. Ler essas colunas direto
+// fazia a Cassie responder "R$0,00"/"não informado" pra QUALQUER
+// cliente (demo ou real). Os 4 helpers abaixo replicam a MESMA fórmula
+// que a tela usa (`computeRevenueFromLeads`/`computeRoas`/
+// `computeRateMetrics` em src/lib/metrics.ts, e o `autoRevenue` de
+// src/components/project/ProjectDetailDialog.tsx) — Deno não importa
+// código do frontend (paths `@/*` do Vite), por isso duplicado aqui;
+// qualquer mudança nessas fórmulas no front precisa ser espelhada aqui.
+function computeAutoRevenue(
+  conversions: number,
+  conversionType: string | null,
+  leadsToClose: number | null,
+  averageTicket: number | null,
+): number | null {
+  if (averageTicket == null) return null
+  if (conversionType === 'vendas') return conversions * averageTicket
+  if (!leadsToClose || leadsToClose <= 0) return null
+  return (conversions / leadsToClose) * averageTicket
+}
+
+function computeRoas(revenue: number | null, spend: number): number | null {
+  return revenue != null && spend > 0 ? revenue / spend : null
+}
+
+function computeCtr(clicks: number, impressions: number): number | null {
+  return impressions > 0 ? (clicks / impressions) * 100 : null
+}
+
+function computeCpa(spend: number, conversions: number): number | null {
+  return conversions > 0 ? spend / conversions : null
+}
+
+interface CampaignTotals {
+  spend: number
+  clicks: number
+  impressions: number
+  conversions: number
+}
+
+const emptyTotals = (): CampaignTotals => ({ spend: 0, clicks: 0, impressions: 0, conversions: 0 })
+
+/** Spend/clicks/impressions/conversões de cada projeto, somados a partir
+ * das campanhas vinculadas (`project_campaign_links` ->
+ * `campaign_performance_snapshots`, últimos 30 dias) — mesma fonte que
+ * `useCampaignPerformance` usa no Portal Gestor, nunca as colunas cruas
+ * de `projects`. */
+async function fetchProjectMetrics(
+  supabase: SupabaseClient,
+  projectIds: string[],
+  since: string,
+): Promise<Map<string, CampaignTotals>> {
+  const projectMetrics = new Map<string, CampaignTotals>()
+  if (projectIds.length === 0) return projectMetrics
+
+  const { data: links } = await supabase
+    .from('project_campaign_links')
+    .select('project_id, connection_id, external_campaign_id')
+    .in('project_id', projectIds)
+  const linkList = links ?? []
+  if (linkList.length === 0) return projectMetrics
+
+  const connectionIds = Array.from(new Set(linkList.map((l) => l.connection_id)))
+  const { data: campaignSnapshots } = await supabase
+    .from('campaign_performance_snapshots')
+    .select('connection_id, external_campaign_id, spend, clicks, impressions, conversions')
+    .in('connection_id', connectionIds)
+    .gte('snapshot_date', since)
+
+  const byCampaignKey = new Map<string, CampaignTotals>()
+  for (const s of campaignSnapshots ?? []) {
+    const key = `${s.connection_id}|${s.external_campaign_id}`
+    const acc = byCampaignKey.get(key) ?? emptyTotals()
+    acc.spend += s.spend ?? 0
+    acc.clicks += s.clicks ?? 0
+    acc.impressions += s.impressions ?? 0
+    acc.conversions += s.conversions ?? 0
+    byCampaignKey.set(key, acc)
+  }
+
+  for (const link of linkList) {
+    const campaignTotals = byCampaignKey.get(`${link.connection_id}|${link.external_campaign_id}`)
+    if (!campaignTotals) continue
+    const acc = projectMetrics.get(link.project_id) ?? emptyTotals()
+    acc.spend += campaignTotals.spend
+    acc.clicks += campaignTotals.clicks
+    acc.impressions += campaignTotals.impressions
+    acc.conversions += campaignTotals.conversions
+    projectMetrics.set(link.project_id, acc)
+  }
+  return projectMetrics
 }
 
 async function buildClientContext(supabase: SupabaseClient, client: ClientContextRow | null, clientId: string): Promise<string> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const [{ data: projects }, { data: tasks }, { data: snapshots }, { data: meetings }, { data: goals }, { data: comments }] =
     await Promise.all([
-      supabase.from('projects').select('title, status, cpa, roas, ctr, spend, revenue, channel').eq('client_id', clientId),
+      supabase.from('projects').select('id, title, status, conversion_type, channel, revenue').eq('client_id', clientId),
       supabase.from('tasks').select('title, status, due_date, priority').eq('client_id', clientId),
       supabase
         .from('performance_snapshots')
-        .select('spend, revenue, roas, ctr')
+        .select('spend, clicks, impressions, conversions')
         .eq('client_id', clientId)
-        .gte('snapshot_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)),
+        .gte('snapshot_date', since),
       supabase.from('meetings').select('title, date, status, cancellation_reason').eq('client_id', clientId).order('date', { ascending: false }).limit(10),
       supabase
         .from('smart_goals')
@@ -259,22 +355,37 @@ async function buildClientContext(supabase: SupabaseClient, client: ClientContex
         .limit(10),
     ])
 
+  const projectList = projects ?? []
+  const projectMetrics = await fetchProjectMetrics(
+    supabase,
+    projectList.map((p) => p.id),
+    since,
+  )
+  const revenueOf = (p: (typeof projectList)[number]): number | null => {
+    const m = projectMetrics.get(p.id)
+    const autoRevenue = computeAutoRevenue(m?.conversions ?? 0, p.conversion_type, client?.leads_to_close ?? null, client?.average_ticket ?? null)
+    return p.revenue ?? autoRevenue
+  }
+
   const lines: string[] = []
 
   lines.push(`Cliente: ${client?.name ?? 'desconhecido'}${client?.company ? ` (${client.company})` : ''}`)
   lines.push(`Plano: ${client?.plan ?? 'não informado'} · Health score: ${client?.health_score ?? 'não informado'}`)
 
-  const projectList = projects ?? []
   if (projectList.length > 0) {
-    lines.push('\nProjetos:')
+    lines.push('\nProjetos (últimos 30 dias):')
     for (const p of projectList) {
-      const projectConversions = p.cpa && p.cpa > 0 && p.spend ? Math.round(p.spend / p.cpa) : null
+      const m = projectMetrics.get(p.id) ?? emptyTotals()
+      const revenue = revenueOf(p)
+      const cpa = computeCpa(m.spend, m.conversions)
+      const ctr = computeCtr(m.clicks, m.impressions)
+      const roas = computeRoas(revenue, m.spend)
       lines.push(
-        `- "${p.title}" (${p.status}, canal: ${p.channel ?? 'não informado'}) — CPA: ${p.cpa ?? '—'}, ROAS: ${p.roas ?? '—'}, CTR: ${p.ctr ?? '—'}, gasto: ${p.spend ?? '—'}, receita: ${p.revenue ?? '—'}, conversões estimadas: ${projectConversions ?? '—'}`,
+        `- "${p.title}" (${p.status}, canal: ${p.channel ?? 'não informado'}) — CPA: ${cpa?.toFixed(2) ?? '—'}, ROAS: ${roas?.toFixed(2) ?? '—'}, CTR: ${ctr != null ? `${ctr.toFixed(2)}%` : '—'}, gasto: ${m.spend.toFixed(2)}, receita estimada: ${revenue != null ? revenue.toFixed(2) : '—'}, conversões: ${m.conversions}`,
       )
     }
-    const totalConversions = Math.round(computeConversions(projectList))
-    lines.push(`Conversões estimadas (total, somando todos os projetos, gasto ÷ CPA): ${totalConversions}`)
+    const totalConversions = projectList.reduce((sum, p) => sum + (projectMetrics.get(p.id)?.conversions ?? 0), 0)
+    lines.push(`Conversões (total, últimos 30 dias, somando todos os projetos): ${totalConversions}`)
   } else {
     lines.push('\nSem projetos cadastrados.')
   }
@@ -326,13 +437,16 @@ async function buildClientContext(supabase: SupabaseClient, client: ClientContex
   const snapshotList = snapshots ?? []
   if (snapshotList.length > 0) {
     const totalSpend = snapshotList.reduce((sum, s) => sum + (s.spend ?? 0), 0)
-    const totalRevenue = snapshotList.reduce((sum, s) => sum + (s.revenue ?? 0), 0)
-    const withRoas = snapshotList.filter((s) => s.roas != null)
-    const avgRoas = withRoas.length > 0 ? withRoas.reduce((sum, s) => sum + (s.roas ?? 0), 0) / withRoas.length : null
-    const withCtr = snapshotList.filter((s) => s.ctr != null)
-    const avgCtr = withCtr.length > 0 ? withCtr.reduce((sum, s) => sum + (s.ctr ?? 0), 0) / withCtr.length : null
+    const totalClicks = snapshotList.reduce((sum, s) => sum + (s.clicks ?? 0), 0)
+    const totalImpressions = snapshotList.reduce((sum, s) => sum + (s.impressions ?? 0), 0)
+    // Receita total = soma da receita já calculada por projeto acima —
+    // nunca uma 2ª fórmula agregada à parte (evita 2 contas diferentes
+    // pro mesmo número).
+    const totalRevenue = projectList.reduce((sum, p) => sum + (revenueOf(p) ?? 0), 0)
+    const ctr = computeCtr(totalClicks, totalImpressions)
+    const roas = computeRoas(totalRevenue, totalSpend)
     lines.push(
-      `\nÚltimos 30 dias: gasto total ${totalSpend.toFixed(2)}, receita total ${totalRevenue.toFixed(2)}, ROAS médio ${avgRoas?.toFixed(2) ?? '—'}, CTR médio ${avgCtr?.toFixed(2) ?? '—'}.`,
+      `\nÚltimos 30 dias: gasto total ${totalSpend.toFixed(2)}, receita estimada total ${totalRevenue.toFixed(2)}, ROAS ${roas?.toFixed(2) ?? '—'}, CTR ${ctr != null ? `${ctr.toFixed(2)}%` : '—'}.`,
     )
   } else {
     lines.push('\nSem dados de desempenho sincronizados nos últimos 30 dias.')
