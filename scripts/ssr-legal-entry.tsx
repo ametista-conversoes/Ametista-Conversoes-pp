@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { StaticRouter } from 'react-router-dom/server'
+import { StaticRouter } from 'react-router'
 import PrivacyPolicy from '../src/pages/legal/PrivacyPolicy'
 import PrivacyPolicyEn from '../src/pages/legal/PrivacyPolicyEn'
 import TermsOfUse from '../src/pages/legal/TermsOfUse'

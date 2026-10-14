@@ -10,7 +10,7 @@ Filosofia: centralizar a operação, não substituir ferramentas que já existem
 ## Stack obrigatório — não trocar sem perguntar antes
 - Frontend: React 18 + TypeScript + Vite
 - Estilo: Tailwind CSS + shadcn/ui (Radix UI)
-- Rotas: React Router DOM 6
+- Rotas: React Router DOM 7
 - Dados/cache: TanStack Query
 - Gráficos: Recharts
 - Ícones: lucide-react (exclusivamente)
