@@ -244,6 +244,16 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB)
 }
 
+// Fase 51.3: o "state" do OAuth usa um nonce dedicado (não o
+// connection_id direto) — de uso único e com validade curta, pra não
+// deixar um identificador permanente fazendo esse papel (ver
+// migration-100-oauth-state-nonce.sql).
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+
+function generateOAuthStateNonce(): string {
+  return crypto.randomUUID()
+}
+
 // Fase 21.1: além do console.error (visível só em Edge Functions >
 // Logs), grava em error_logs pra aparecer em /errors no Portal
 // Gestor. Nunca lança — logging não pode virar uma fonte nova de erro.
@@ -496,6 +506,13 @@ async function handleConnect(req: Request, url: URL) {
     .single()
   if (connectionError) return dbErrorResponse('handleConnect: upsert conexão', connectionError)
 
+  const stateNonce = generateOAuthStateNonce()
+  const { error: nonceError } = await supabase
+    .from('digital_asset_connections')
+    .update({ oauth_state_nonce: stateNonce, oauth_state_expires_at: new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString() })
+    .eq('id', connection.id)
+  if (nonceError) return dbErrorResponse('handleConnect: gravar nonce do state', nonceError)
+
   // Meta: monta a URL de callback a partir do caminho da própria
   // requisição (troca só o final "/connect" por "/callback") combinado
   // com SUPABASE_URL — o "origin" visto de dentro da função é um
@@ -513,7 +530,7 @@ async function handleConnect(req: Request, url: URL) {
     authorizationUrl.searchParams.set('redirect_uri', redirectUri)
     authorizationUrl.searchParams.set('response_type', 'code')
     authorizationUrl.searchParams.set('scope', META_SCOPE)
-    authorizationUrl.searchParams.set('state', connection.id)
+    authorizationUrl.searchParams.set('state', stateNonce)
   } else {
     authorizationUrl = new URL(GOOGLE_AUTHORIZE_URL)
     authorizationUrl.searchParams.set('client_id', Deno.env.get(GOOGLE_OAUTH_CLIENT_ID_ENV) ?? '')
@@ -522,7 +539,7 @@ async function handleConnect(req: Request, url: URL) {
     authorizationUrl.searchParams.set('access_type', 'offline')
     authorizationUrl.searchParams.set('prompt', 'consent')
     authorizationUrl.searchParams.set('scope', GOOGLE_SCOPES[provider])
-    authorizationUrl.searchParams.set('state', connection.id)
+    authorizationUrl.searchParams.set('state', stateNonce)
   }
 
   return jsonResponse({ authorizationUrl: authorizationUrl.toString(), connectionId: connection.id })
@@ -566,6 +583,13 @@ async function handleAgencyConnect(req: Request, url: URL) {
     .single()
   if (connectionError) return dbErrorResponse('handleAgencyConnect: upsert conexão de agência', connectionError)
 
+  const stateNonce = generateOAuthStateNonce()
+  const { error: nonceError } = await supabase
+    .from('agency_provider_connections')
+    .update({ oauth_state_nonce: stateNonce, oauth_state_expires_at: new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString() })
+    .eq('id', connection.id)
+  if (nonceError) return dbErrorResponse('handleAgencyConnect: gravar nonce do state', nonceError)
+
   const redirectUri =
     provider === 'meta_ads'
       ? `${Deno.env.get('SUPABASE_URL')}/functions/v1${url.pathname.replace(/\/agency-connect$/, '/callback')}`
@@ -578,7 +602,7 @@ async function handleAgencyConnect(req: Request, url: URL) {
     authorizationUrl.searchParams.set('redirect_uri', redirectUri)
     authorizationUrl.searchParams.set('response_type', 'code')
     authorizationUrl.searchParams.set('scope', META_AGENCY_SCOPE)
-    authorizationUrl.searchParams.set('state', `agency:${connection.id}`)
+    authorizationUrl.searchParams.set('state', `agency:${stateNonce}`)
   } else {
     authorizationUrl = new URL(GOOGLE_AUTHORIZE_URL)
     authorizationUrl.searchParams.set('client_id', Deno.env.get(GOOGLE_OAUTH_CLIENT_ID_ENV) ?? '')
@@ -587,7 +611,7 @@ async function handleAgencyConnect(req: Request, url: URL) {
     authorizationUrl.searchParams.set('access_type', 'offline')
     authorizationUrl.searchParams.set('prompt', 'consent')
     authorizationUrl.searchParams.set('scope', GOOGLE_SCOPES.google_ads)
-    authorizationUrl.searchParams.set('state', `agency:${connection.id}`)
+    authorizationUrl.searchParams.set('state', `agency:${stateNonce}`)
   }
 
   return jsonResponse({ authorizationUrl: authorizationUrl.toString() })
@@ -676,11 +700,22 @@ async function handleCallback(url: URL) {
 
   const { data: connection, error: connectionError } = await supabase
     .from('digital_asset_connections')
-    .select('id, provider, digital_asset_id, external_account_id')
-    .eq('id', state)
+    .select('id, provider, digital_asset_id, external_account_id, oauth_state_expires_at')
+    .eq('oauth_state_nonce', state)
     .maybeSingle()
   if (connectionError) return dbErrorRedirect('handleCallback: buscar conexão', connectionError)
   if (!connection) return callbackRedirect(false, 'Conexão não encontrada (state inválido).')
+
+  // Nonce é de uso único — invalida na hora, antes de qualquer outra
+  // coisa, pra uma 2ª tentativa com o mesmo "state" (replay) já cair em
+  // "state inválido" acima, mesmo que esta 1ª chamada ainda esteja em
+  // andamento.
+  await supabase.from('digital_asset_connections').update({ oauth_state_nonce: null, oauth_state_expires_at: null }).eq('id', connection.id)
+
+  if (!connection.oauth_state_expires_at || new Date(connection.oauth_state_expires_at).getTime() < Date.now()) {
+    await supabase.from('digital_asset_connections').update({ status: 'error' }).eq('id', connection.id)
+    return callbackRedirect(false, 'Conexão expirada (state vencido) — tente conectar de novo.')
+  }
 
   if (oauthError || !code) {
     await supabase.from('digital_asset_connections').update({ status: 'error' }).eq('id', connection.id)
@@ -840,16 +875,25 @@ async function handleCallback(url: URL) {
  * grava em agency_provider_connections/agency_oauth_tokens em vez de
  * digital_asset_connections/oauth_tokens. Chamada por handleCallback
  * quando o "state" começa com "agency:". */
-async function handleAgencyCallback(url: URL, agencyConnectionId: string, code: string | null, oauthError: string | null) {
+async function handleAgencyCallback(url: URL, agencyStateNonce: string, code: string | null, oauthError: string | null) {
   const supabase = getServiceClient()
 
   const { data: connection, error: connectionError } = await supabase
     .from('agency_provider_connections')
-    .select('id, provider')
-    .eq('id', agencyConnectionId)
+    .select('id, provider, oauth_state_expires_at')
+    .eq('oauth_state_nonce', agencyStateNonce)
     .maybeSingle()
   if (connectionError) return dbErrorRedirect('handleAgencyCallback: buscar conexão de agência', connectionError)
   if (!connection) return callbackRedirect(false, 'Conexão de agência não encontrada (state inválido).', '/settings')
+
+  // Nonce de uso único — invalida antes de seguir (mesmo motivo de
+  // handleCallback).
+  await supabase.from('agency_provider_connections').update({ oauth_state_nonce: null, oauth_state_expires_at: null }).eq('id', connection.id)
+
+  if (!connection.oauth_state_expires_at || new Date(connection.oauth_state_expires_at).getTime() < Date.now()) {
+    await supabase.from('agency_provider_connections').update({ status: 'error' }).eq('id', connection.id)
+    return callbackRedirect(false, 'Conexão expirada (state vencido) — tente conectar de novo.', '/settings')
+  }
 
   if (oauthError || !code) {
     await supabase.from('agency_provider_connections').update({ status: 'error' }).eq('id', connection.id)
