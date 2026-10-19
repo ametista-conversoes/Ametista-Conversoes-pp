@@ -293,58 +293,64 @@ export default function ClientDetail() {
 
       {/* Cabeçalho */}
       <Card className="rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
-        <CardContent className="flex flex-wrap items-center gap-4 p-0">
-          <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-secondary/50 text-muted-foreground hover:opacity-80">
-            {client.logo_url ? (
-              <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
-            ) : (
-              <Building2 className="h-6 w-6" />
-            )}
-            <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100">
-              <Upload className="h-4 w-4 text-white" />
-            </span>
-            <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={handleLogoChange} />
-          </label>
+        <CardContent className="flex flex-col gap-4 p-0 sm:flex-row sm:items-center">
+          {/* Celular: logo + nome numa linha, status + Salvar na de baixo —
+           * numa linha só os inputs encolhiam até sumir. */}
+          <div className="flex min-w-0 flex-1 items-center gap-4">
+            <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-secondary/50 text-muted-foreground hover:opacity-80">
+              {client.logo_url ? (
+                <img src={client.logo_url} alt={client.name} className="h-full w-full object-cover" />
+              ) : (
+                <Building2 className="h-6 w-6" />
+              )}
+              <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100">
+                <Upload className="h-4 w-4 text-white" />
+              </span>
+              <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={handleLogoChange} />
+            </label>
 
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <Input
-              value={nameValue}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nome do cliente"
-              className="h-9 text-base font-semibold"
-            />
-            <Input
-              value={companyValue}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Nome do negócio (ex: Loja Aurora)"
-              className="h-8 text-sm text-muted-foreground"
-            />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Input
+                value={nameValue}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nome do cliente"
+                className="h-9 text-base font-semibold"
+              />
+              <Input
+                value={companyValue}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="Nome do negócio (ex: Loja Aurora)"
+                className="h-8 text-sm text-muted-foreground"
+              />
+            </div>
           </div>
 
-          {client.is_demo && <Badge className={demoClientStyle}>{demoClientLabel}</Badge>}
+          <div className="flex flex-wrap items-center gap-4">
+            {client.is_demo && <Badge className={demoClientStyle}>{demoClientLabel}</Badge>}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild disabled={updateStatus.isPending}>
-              <Badge className={`cursor-pointer ${clientStatusStyles[client.status]}`}>
-                {clientStatusLabels[client.status] ?? client.status}
-              </Badge>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {CHANGEABLE_STATUSES.map((status) => (
-                <DropdownMenuItem key={status} onSelect={() => updateStatus.mutate({ clientId: client.id, status })}>
-                  {clientStatusLabels[status]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild disabled={updateStatus.isPending}>
+                <Badge className={`cursor-pointer ${clientStatusStyles[client.status]}`}>
+                  {clientStatusLabels[client.status] ?? client.status}
+                </Badge>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {CHANGEABLE_STATUSES.map((status) => (
+                  <DropdownMenuItem key={status} onSelect={() => updateStatus.mutate({ clientId: client.id, status })}>
+                    {clientStatusLabels[status]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {/* Fase 48.13 — pedido do usuário: antes só dava pra salvar os
-           * campos editáveis da ficha (nome, contato, plano, financeiro
-           * etc.) rolando até o fim da página, no botão de Observações
-           * internas (que agora ficou específico pra nota, ver abaixo). */}
-          <Button type="button" onClick={handleSaveDetails} disabled={savingDetails}>
-            {savingDetails ? 'Salvando...' : 'Salvar'}
-          </Button>
+            {/* Fase 48.13 — pedido do usuário: antes só dava pra salvar os
+             * campos editáveis da ficha (nome, contato, plano, financeiro
+             * etc.) rolando até o fim da página, no botão de Observações
+             * internas (que agora ficou específico pra nota, ver abaixo). */}
+            <Button type="button" onClick={handleSaveDetails} disabled={savingDetails} className="ml-auto sm:ml-0">
+              {savingDetails ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
