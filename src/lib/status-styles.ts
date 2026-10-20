@@ -248,7 +248,9 @@ export const smartGoalMetricLabels: Record<string, string> = {
   cpc: 'CPC',
   ctr: 'CTR',
   cpm: 'CPM',
-  // Fase 53 — etapas do funil (Impressões → Cliques → Leads...) do 1.1.
+  // Fase 53 — etapas do funil (Impressões → Cliques → Leads...) do 1.1 e
+  // a verba mensal de mídia (entrada do funil reverso, ver lib/funnel.ts).
+  orcamento: 'Orçamento mensal',
   impressoes: 'Impressões',
   cliques: 'Cliques',
   leads: 'Leads',

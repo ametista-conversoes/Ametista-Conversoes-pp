@@ -3347,6 +3347,55 @@ export function useDeleteSmartGoal() {
   })
 }
 
+export interface FunnelGoalWrite {
+  metric_type: string
+  title: string
+  target_value: number
+  /** Meta do mesmo tipo já existente pro cliente — só o valor-alvo é
+   * atualizado (prazo, progresso e status ficam como estão). */
+  existingId: string | null
+}
+
+/** Fase 53 — salva o funil reverso: cria as metas que faltam e atualiza o
+ * valor-alvo das que já existem (uma por tipo), nunca duplica. */
+export function useSaveFunnelGoals() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ clientId, targetDate, goals }: { clientId: string; targetDate: string; goals: FunnelGoalWrite[] }) => {
+      const inserts = goals
+        .filter((g) => !g.existingId)
+        .map((g) => ({
+          title: g.title,
+          client_id: clientId,
+          metric_type: g.metric_type,
+          target_value: g.target_value,
+          current_value: 0,
+          target_date: targetDate,
+          status: 'on_track',
+        }))
+      if (inserts.length > 0) {
+        const { error } = await supabase.from('smart_goals').insert(inserts)
+        if (error) throw error
+      }
+      for (const g of goals.filter((goal) => goal.existingId)) {
+        const { error } = await supabase
+          .from('smart_goals')
+          .update({ target_value: g.target_value })
+          .eq('id', g.existingId as string)
+        if (error) throw error
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-smart-goals'] })
+      toast.success('Metas do funil salvas.')
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-smart-goals'] })
+      toast.error('Não foi possível salvar todas as metas do funil.')
+    },
+  })
+}
+
 const COMMENTS_ENTITY_TYPE = 'general'
 
 export interface ManagerCommentRecord {

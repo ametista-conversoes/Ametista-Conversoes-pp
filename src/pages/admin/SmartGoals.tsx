@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
+import { FunnelBuilderDialog } from '@/components/smart-goals/FunnelBuilderDialog'
+import { FunnelCard } from '@/components/smart-goals/FunnelCard'
 import { NewSmartGoalDialog } from '@/components/smart-goals/NewSmartGoalDialog'
 import { SmartGoalCard } from '@/components/smart-goals/SmartGoalCard'
 import { DeleteModeToggle } from '@/components/shared/DeleteModeToggle'
@@ -83,9 +85,17 @@ export default function SmartGoals() {
             </PopoverContent>
           </Popover>
 
+          <FunnelBuilderDialog goals={goals ?? []} defaultClientId={clientFilter === ALL_CLIENTS ? null : clientFilter} />
           <NewSmartGoalDialog />
         </div>
       </div>
+
+      {clientFilter !== ALL_CLIENTS && (
+        <FunnelCard
+          clientName={(clients ?? []).find((client) => client.id === clientFilter)?.name ?? 'Cliente'}
+          goals={filteredGoals}
+        />
+      )}
 
       {filteredGoals.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada ainda.</p>}
 
