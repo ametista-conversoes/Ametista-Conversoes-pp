@@ -10,8 +10,12 @@ import type {
 const CLIENT_ID = 'client-1'
 const OTHER_CLIENT_ID = 'client-2'
 
+// Data LOCAL, mesma régua de `getTodayIsoDate` — com `toISOString()` puro
+// (UTC), das 21h às 23h59 de Brasília "ontem" virava "hoje" e os testes de
+// tarefa atrasada falhavam só nesse horário.
 function isoDaysFromNow(days: number): string {
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 10)
 }
 
 function makeTask(overrides: Partial<ManagerTaskRecord> = {}): ManagerTaskRecord {
