@@ -1635,7 +1635,10 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
     // dois níveis (byDate/byCampaign) a partir da mesma chamada.
     const insightsUrl = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${connection.external_account_id}/insights`)
     insightsUrl.searchParams.set('level', 'campaign')
-    insightsUrl.searchParams.set('fields', 'campaign_id,campaign_name,account_name,spend,clicks,impressions,actions,action_values')
+    // Cliques no link (inline_link_clicks), não Cliques (todos) — mesmo clique
+    // da predefinição de colunas do Gerenciador; `clicks` incluía curtida,
+    // comentário, clique no perfil etc.
+    insightsUrl.searchParams.set('fields', 'campaign_id,campaign_name,account_name,spend,inline_link_clicks,impressions,actions,action_values')
     insightsUrl.searchParams.set('date_preset', 'last_30d')
     insightsUrl.searchParams.set('time_increment', '1')
     insightsUrl.searchParams.set('access_token', accessToken)
@@ -1684,7 +1687,7 @@ async function syncConnection(supabase: SupabaseClient, connection: SyncableConn
       const conversions = actions.reduce((sum, a) => sum + Number(a.value ?? 0), 0)
       const conversionValue = actionValues.reduce((sum, a) => sum + Number(a.value ?? 0), 0)
       const spend = Number(row.spend ?? 0)
-      const clicks = Number(row.clicks ?? 0)
+      const clicks = Number(row.inline_link_clicks ?? 0)
       const impressions = Number(row.impressions ?? 0)
       const acc = byDate.get(date) ?? { spend: 0, clicks: 0, impressions: 0, conversions: 0 }
       acc.spend += spend
@@ -2239,7 +2242,7 @@ async function handleListAdGroups(req: Request, url: URL) {
 
     const adSetInsightsUrl = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${campaignId}/insights`)
     adSetInsightsUrl.searchParams.set('level', 'adset')
-    adSetInsightsUrl.searchParams.set('fields', 'adset_id,adset_name,spend,clicks,impressions,actions')
+    adSetInsightsUrl.searchParams.set('fields', 'adset_id,adset_name,spend,inline_link_clicks,impressions,actions')
     adSetInsightsUrl.searchParams.set('date_preset', 'last_30d')
     adSetInsightsUrl.searchParams.set('access_token', accessToken)
     const adSetInsightsRes = await fetch(adSetInsightsUrl.toString())
@@ -2253,7 +2256,7 @@ async function handleListAdGroups(req: Request, url: URL) {
       const conversions = actions.reduce((sum, a) => sum + Number(a.value ?? 0), 0)
       const acc = byAdSet.get(id) ?? { id, name: (row.adset_name as string | undefined) ?? id, status: '', spend: 0, clicks: 0, impressions: 0, conversions: 0 }
       acc.spend += Number(row.spend ?? 0)
-      acc.clicks += Number(row.clicks ?? 0)
+      acc.clicks += Number(row.inline_link_clicks ?? 0)
       acc.impressions += Number(row.impressions ?? 0)
       acc.conversions += conversions
       byAdSet.set(id, acc)
