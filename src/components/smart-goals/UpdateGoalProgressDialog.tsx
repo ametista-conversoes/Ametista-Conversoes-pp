@@ -15,8 +15,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
-import { useClientAdConversions, useClientLeadStatusCounts, useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
-import { adConversionsLabel, isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
+import { useClientAdTotals, useClientLeadStatusCounts, useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
+import { adMetricLabel, adMetricValue } from '@/lib/ad-goal-metrics'
+import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
 import { smartGoalStatusLabels } from '@/lib/status-styles'
 
 const updateProgressSchema = z.object({
@@ -40,8 +41,9 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
   const leadCounts = useClientLeadStatusCounts(isLeadMetric && open ? goal.client_id : null)
   const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
 
-  const adConversionsMetric = adConversionsLabel(goal.metric_type)
-  const adConversions = useClientAdConversions(adConversionsMetric && open ? goal.client_id : null)
+  const adMetric = adMetricLabel(goal.metric_type)
+  const adTotals = useClientAdTotals(adMetric && open ? goal.client_id : null)
+  const adValue = adTotals.data?.hasLinkedCampaigns ? adMetricValue(goal.metric_type, adTotals.data) : null
 
   const form = useForm<UpdateProgressValues>({
     resolver: zodResolver(updateProgressSchema),
@@ -105,15 +107,13 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
                       Usar {leadCountLabel(goal.metric_type).toLowerCase()}: {realCount}
                     </button>
                   )}
-                  {adConversionsMetric && adConversions.data?.hasLinkedCampaigns && (
+                  {adMetric && adValue != null && (
                     <button
                       type="button"
                       className="block text-xs text-purple-300 underline decoration-dotted hover:text-purple-400"
-                      onClick={() =>
-                        form.setValue('currentValue', String(adConversions.data!.conversions), { shouldDirty: true })
-                      }
+                      onClick={() => form.setValue('currentValue', String(adValue), { shouldDirty: true })}
                     >
-                      Usar {adConversionsMetric.toLowerCase()}: {adConversions.data.conversions}
+                      Usar {adMetric.charAt(0).toLowerCase() + adMetric.slice(1)}: {adValue}
                     </button>
                   )}
                   <FormMessage />

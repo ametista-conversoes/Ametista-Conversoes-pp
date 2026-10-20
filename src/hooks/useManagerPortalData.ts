@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
+import type { AdTotals } from '@/lib/ad-goal-metrics'
 import { aggregateAudienceInsights, type AudienceRawResponse } from '@/lib/audience-insights'
 import { fetchLinkedClientAccounts, linkClientAccount, resendClientInvite, unlinkClientAccount } from '@/lib/client-access'
 import type { PerformanceSnapshotRecord } from '@/hooks/useClientPortalData'
@@ -2865,35 +2866,46 @@ export function useClientLeadStatusCountsForMonth(
   })
 }
 
-export interface ClientAdConversions {
-  /** Soma de `conversions` (pixel/tag do próprio Google/Meta Ads) dos
-   * últimos 30 dias, de TODAS as campanhas vinculadas a QUALQUER
-   * projeto do cliente — número por natureza diferente da contagem de
-   * respostas de formulário (uma conversão rastreada pelo provedor não
-   * é necessariamente um preenchimento do Google Forms conectado). */
-  conversions: number
+export interface ClientAdTotals extends AdTotals {
   /** false quando o cliente não tem nenhuma campanha vinculada ainda —
    * usado pra decidir se vale a pena mostrar a linha (0 por falta de
    * vínculo é diferente de 0 conversões reais). */
   hasLinkedCampaigns: boolean
 }
 
-/** Fase 37, Bloco 2 — "Leads" (bruto) ganha uma 2ª fonte de contagem
- * real: em vez de só respostas de formulário, também soma a conversão
- * que o próprio Google/Meta Ads já rastreia via pixel/tag nas campanhas
- * vinculadas aos projetos do cliente (`campaign_performance_snapshots`,
- * já sincronizado pra CPA/ROAS — só reaproveitado aqui). */
-export function useClientAdConversions(clientId: string | null) {
+/** Fase 37, Bloco 2 / Fase 53 — totais dos últimos 30 dias (investimento,
+ * cliques, impressões e conversões do pixel/tag) de TODAS as campanhas
+ * vinculadas a QUALQUER projeto do cliente (`campaign_performance_snapshots`,
+ * já sincronizado pra CPA/ROAS — só reaproveitado aqui), mais
+ * `leads_to_close`/`average_ticket` da ficha pra receita estimada. Alimenta
+ * a sugestão "nas contas de anúncio" das Metas SMART (`adMetricValue`). */
+export function useClientAdTotals(clientId: string | null) {
   return useQuery({
-    queryKey: ['client-ad-conversions', clientId],
-    queryFn: async (): Promise<ClientAdConversions> => {
+    queryKey: ['client-ad-totals', clientId],
+    queryFn: async (): Promise<ClientAdTotals> => {
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('leads_to_close, average_ticket')
+        .eq('id', clientId as string)
+        .single()
+      if (clientError) throw clientError
+      const empty: ClientAdTotals = {
+        spend: 0,
+        clicks: 0,
+        impressions: 0,
+        conversions: 0,
+        leadsToClose: (client?.leads_to_close as number | null) ?? null,
+        averageTicket: (client?.average_ticket as number | null) ?? null,
+        hasLinkedCampaigns: false,
+      }
+
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('id')
         .eq('client_id', clientId as string)
       if (projectsError) throw projectsError
       const projectIds = (projects ?? []).map((p) => p.id as string)
-      if (projectIds.length === 0) return { conversions: 0, hasLinkedCampaigns: false }
+      if (projectIds.length === 0) return empty
 
       const { data: links, error: linksError } = await supabase
         .from('project_campaign_links')
@@ -2901,7 +2913,7 @@ export function useClientAdConversions(clientId: string | null) {
         .in('project_id', projectIds)
       if (linksError) throw linksError
       const linkRows = (links ?? []) as { connection_id: string; external_campaign_id: string }[]
-      if (linkRows.length === 0) return { conversions: 0, hasLinkedCampaigns: false }
+      if (linkRows.length === 0) return empty
 
       const connectionIds = Array.from(new Set(linkRows.map((l) => l.connection_id)))
       const validPairs = new Set(linkRows.map((l) => `${l.connection_id}:${l.external_campaign_id}`))
@@ -2909,16 +2921,28 @@ export function useClientAdConversions(clientId: string | null) {
 
       const { data: snapshots, error: snapshotsError } = await supabase
         .from('campaign_performance_snapshots')
-        .select('connection_id, external_campaign_id, conversions, snapshot_date')
+        .select('connection_id, external_campaign_id, spend, clicks, impressions, conversions, snapshot_date')
         .in('connection_id', connectionIds)
         .gte('snapshot_date', since)
       if (snapshotsError) throw snapshotsError
 
-      const conversions = ((snapshots ?? []) as { connection_id: string; external_campaign_id: string; conversions: number | null }[])
-        .filter((s) => validPairs.has(`${s.connection_id}:${s.external_campaign_id}`))
-        .reduce((sum, s) => sum + (s.conversions ?? 0), 0)
-
-      return { conversions, hasLinkedCampaigns: true }
+      type Row = {
+        connection_id: string
+        external_campaign_id: string
+        spend: number | null
+        clicks: number | null
+        impressions: number | null
+        conversions: number | null
+      }
+      const totals = { ...empty, hasLinkedCampaigns: true }
+      for (const s of (snapshots ?? []) as Row[]) {
+        if (!validPairs.has(`${s.connection_id}:${s.external_campaign_id}`)) continue
+        totals.spend += Number(s.spend ?? 0)
+        totals.clicks += s.clicks ?? 0
+        totals.impressions += s.impressions ?? 0
+        totals.conversions += s.conversions ?? 0
+      }
+      return totals
     },
     enabled: !!clientId,
   })

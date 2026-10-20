@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
-import { useClientAdConversions, useClientLeadStatusCounts, useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
+import { useClientAdTotals, useClientLeadStatusCounts, useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
+import { adMetricLabel, adMetricValue } from '@/lib/ad-goal-metrics'
 import { formatDate, getGoalDeadlineStatus } from '@/lib/format'
-import { adConversionsLabel, isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
+import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
 import {
   goalDeadlineStatusLabels,
   goalDeadlineStatusStyles,
@@ -44,9 +45,12 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
   // real: conversão que o próprio Google/Meta Ads já rastreia (pixel/tag
   // das campanhas vinculadas), ao lado da contagem de respostas de
   // formulário — são números diferentes por natureza, mostrados
-  // separados, nunca somados um no outro.
-  const adConversionsMetric = adConversionsLabel(goal.metric_type)
-  const adConversions = useClientAdConversions(adConversionsMetric ? goal.client_id : null)
+  // separados, nunca somados um no outro. Fase 53 — mesmo princípio pras
+  // outras métricas que existem nas contas de anúncio (CPA, Cliques,
+  // Impressões...): valor real dos últimos 30 dias, só como referência.
+  const adMetric = adMetricLabel(goal.metric_type)
+  const adTotals = useClientAdTotals(adMetric ? goal.client_id : null)
+  const adValue = adTotals.data?.hasLinkedCampaigns ? adMetricValue(goal.metric_type, adTotals.data) : null
 
   return (
     <Card className="flex flex-col rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
@@ -91,9 +95,9 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
               cliente na aba Leads)
             </p>
           )}
-          {adConversionsMetric && adConversions.data?.hasLinkedCampaigns && (
+          {adMetric && adValue != null && (
             <p className="mt-1 text-xs text-purple-300">
-              {adConversionsMetric}: {adConversions.data.conversions}
+              {adMetric}: {adValue}
             </p>
           )}
         </div>
