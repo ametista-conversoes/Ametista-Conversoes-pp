@@ -46,6 +46,10 @@ describe('computeFunnel', () => {
     expect(r.sales).toBeNull()
     expect(r.roas).toBeNull()
   })
+
+  it('sem taxa de qualificação, Leads Qualificados fica sem meta (não 0)', () => {
+    expect(computeFunnel({ ...base, qualificationRate: null })!.qualifiedLeads).toBeNull()
+  })
 })
 
 describe('auxiliares', () => {

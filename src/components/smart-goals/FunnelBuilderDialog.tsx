@@ -148,7 +148,7 @@ export function FunnelBuilderDialog({ goals, defaultClientId }: FunnelBuilderDia
     cpa: toNumber(values.cpa) ?? 0,
     ctr: toNumber(values.ctr) ?? 0,
     conversionRate: toNumber(values.conversionRate) ?? 0,
-    qualificationRate: toNumber(values.qualificationRate) ?? 0,
+    qualificationRate: toNumber(values.qualificationRate),
     leadsToClose: toNumber(values.leadsToClose),
     averageTicket: toNumber(values.averageTicket),
   }

@@ -31,6 +31,9 @@ export function FunnelCard({ clientName, goals }: FunnelCardProps) {
   if (stages.length < 2) return null
 
   const worst = stages.reduce((min, stage) => ((stage.percent ?? 100) < (min.percent ?? 100) ? stage : min), stages[0])
+  // Todas no mesmo % (ex: tudo em 0% logo depois de montar o funil) — não há
+  // "pior etapa" pra destacar.
+  const hasGap = stages.some((stage) => (stage.percent ?? 100) !== (worst.percent ?? 100))
 
   return (
     <Card className="rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
@@ -46,7 +49,7 @@ export function FunnelCard({ clientName, goals }: FunnelCardProps) {
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-sm">
               <span className="flex items-center gap-2 text-foreground">
                 {smartGoalMetricLabels[stage.metric]}
-                {stage.metric === worst.metric && (worst.percent ?? 100) < 100 && (
+                {hasGap && stage.metric === worst.metric && (worst.percent ?? 100) < 100 && (
                   <Badge className="bg-amber-500/10 text-amber-400">Maior distância da meta</Badge>
                 )}
               </span>

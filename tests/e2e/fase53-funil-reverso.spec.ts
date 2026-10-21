@@ -28,7 +28,7 @@ test.afterAll(async () => {
 })
 
 test('Montar funil: modo verba calcula, salva e atualiza a meta existente', async ({ page }) => {
-  await loginAs(page, 'admin')
+  await loginAs(page, 'gestor')
   await page.goto('/smart-goals')
   await page.getByRole('combobox').first().click()
   await page.getByRole('option', { name: CLIENT_NAME }).click()

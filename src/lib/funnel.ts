@@ -17,7 +17,8 @@ export interface FunnelInputs {
   /** Percentuais (ex: 2 = 2%). */
   ctr: number
   conversionRate: number
-  qualificationRate: number
+  /** `null` = sem dado: Leads Qualificados fica sem meta (nunca 0). */
+  qualificationRate: number | null
   leadsToClose: number | null
   averageTicket: number | null
 }
@@ -27,7 +28,7 @@ export interface FunnelResult {
   impressions: number
   clicks: number
   leads: number
-  qualifiedLeads: number
+  qualifiedLeads: number | null
   sales: number | null
   revenue: number | null
   roas: number | null
@@ -41,7 +42,7 @@ const round2 = (value: number) => Math.round(value * 100) / 100
  * modo "vendas" sem "Leads p/ fechar 1 venda"). */
 export function computeFunnel(inputs: FunnelInputs): FunnelResult | null {
   const { mode, cpa, ctr, conversionRate, qualificationRate, leadsToClose, averageTicket } = inputs
-  if (!(cpa > 0) || !(ctr > 0) || !(conversionRate > 0) || qualificationRate < 0) return null
+  if (!(cpa > 0) || !(ctr > 0) || !(conversionRate > 0)) return null
 
   let leads: number
   let budget: number
@@ -68,7 +69,7 @@ export function computeFunnel(inputs: FunnelInputs): FunnelResult | null {
     impressions: Math.round(impressions),
     clicks: Math.round(clicks),
     leads: Math.round(leads),
-    qualifiedLeads: Math.round(leads * (qualificationRate / 100)),
+    qualifiedLeads: qualificationRate == null ? null : Math.round(leads * (qualificationRate / 100)),
     sales: sales == null ? null : Math.round(sales * 10) / 10,
     revenue: revenue == null ? null : round2(revenue),
     roas: roas == null ? null : round2(roas),
