@@ -15,9 +15,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
-import { useClientAdTotals, useClientLeadStatusCounts, useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
-import { adMetricLabel, adMetricValue } from '@/lib/ad-goal-metrics'
-import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
+import { useUpdateSmartGoalProgress } from '@/hooks/useManagerPortalData'
+import { isAutoGoalMetric } from '@/lib/goal-progress'
 import { smartGoalStatusLabels } from '@/lib/status-styles'
 
 const updateProgressSchema = z.object({
@@ -32,42 +31,38 @@ type UpdateProgressValues = z.infer<typeof updateProgressSchema>
 
 interface UpdateGoalProgressDialogProps {
   goal: ManagerSmartGoalRecord
+  /** Botão menor, pra caber numa linha da lista do funil. */
+  compact?: boolean
 }
 
-export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps) {
+/** Fase 54 — métrica automática (o app mede): o valor atual é recalculado
+ * pelo banco de hora em hora, então aqui só o status é editável. Métrica
+ * manual (Ticket Médio, "Outro"...): valor atual + status, como antes. */
+export function UpdateGoalProgressDialog({ goal, compact }: UpdateGoalProgressDialogProps) {
   const [open, setOpen] = useState(false)
   const updateProgress = useUpdateSmartGoalProgress()
-  const isLeadMetric = isLeadCountMetric(goal.metric_type)
-  const leadCounts = useClientLeadStatusCounts(isLeadMetric && open ? goal.client_id : null)
-  const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
+  const auto = isAutoGoalMetric(goal.metric_type)
 
-  const adMetric = adMetricLabel(goal.metric_type)
-  const adTotals = useClientAdTotals(adMetric && open ? goal.client_id : null)
-  const adValue = adTotals.data?.hasLinkedCampaigns ? adMetricValue(goal.metric_type, adTotals.data) : null
-
+  const defaults = (): UpdateProgressValues => ({
+    currentValue: String(goal.current_value ?? 0),
+    status: (goal.status as UpdateProgressValues['status']) ?? 'on_track',
+  })
   const form = useForm<UpdateProgressValues>({
     resolver: zodResolver(updateProgressSchema),
-    defaultValues: {
-      currentValue: String(goal.current_value ?? 0),
-      status: (goal.status as UpdateProgressValues['status']) ?? 'on_track',
-    },
+    defaultValues: defaults(),
   })
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
-    if (next) {
-      form.reset({
-        currentValue: String(goal.current_value ?? 0),
-        status: (goal.status as UpdateProgressValues['status']) ?? 'on_track',
-      })
-    }
+    if (next) form.reset(defaults())
   }
 
   async function onSubmit(values: UpdateProgressValues) {
     try {
       await updateProgress.mutateAsync({
         goalId: goal.id,
-        currentValue: Number(values.currentValue),
+        // Automática: mantém o valor calculado pelo banco.
+        currentValue: auto ? (goal.current_value ?? 0) : Number(values.currentValue),
         status: values.status,
       })
       setOpen(false)
@@ -79,8 +74,8 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="secondary" className="w-full">
-          Atualizar progresso
+        <Button variant="secondary" size={compact ? 'sm' : 'default'} className={compact ? '' : 'w-full'}>
+          {auto ? 'Atualizar status' : 'Atualizar progresso'}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -89,37 +84,26 @@ export function UpdateGoalProgressDialog({ goal }: UpdateGoalProgressDialogProps
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="currentValue"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Valor atual</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="any" {...field} />
-                  </FormControl>
-                  {realCount != null && (
-                    <button
-                      type="button"
-                      className="text-xs text-purple-300 underline decoration-dotted hover:text-purple-400"
-                      onClick={() => form.setValue('currentValue', String(realCount), { shouldDirty: true })}
-                    >
-                      Usar {leadCountLabel(goal.metric_type).toLowerCase()}: {realCount}
-                    </button>
-                  )}
-                  {adMetric && adValue != null && (
-                    <button
-                      type="button"
-                      className="block text-xs text-purple-300 underline decoration-dotted hover:text-purple-400"
-                      onClick={() => form.setValue('currentValue', String(adValue), { shouldDirty: true })}
-                    >
-                      Usar {adMetric.charAt(0).toLowerCase() + adMetric.slice(1)}: {adValue}
-                    </button>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {auto ? (
+              <p className="text-sm text-muted-foreground">
+                O valor atual desta meta é calculado automaticamente pelo app (mês corrente, atualizado de hora em
+                hora). Aqui você só ajusta o status.
+              </p>
+            ) : (
+              <FormField
+                control={form.control}
+                name="currentValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor atual</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="any" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

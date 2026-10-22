@@ -1,11 +1,9 @@
-// Ametista Conversões — Fase 53: Metas SMART com o valor real das contas
-// de anúncio ao lado do valor atual (últimos 30 dias). Só SUGESTÃO — o
-// valor atual da meta continua 100% manual e só muda quando o gestor
-// clica em "Usar" no diálogo de progresso. Mesmas fórmulas do card de
-// Performance (`computeRateMetrics`/`computeRevenueFromLeads`), pra o
-// número nunca destoar do resto do app.
+// Ametista Conversões — Fase 53: valor de uma métrica nas contas de anúncio
+// (últimos 30 dias) — usado na coluna "Real (30 dias)" do "Montar funil".
+// Mesmas fórmulas do card de Performance (`computeRateMetrics`/
+// `computeRevenueFromLeads`). O progresso automático das metas (mês
+// corrente) é calculado no banco — migration-102.
 import { computeRateMetrics, computeRevenueFromLeads, computeRoas } from './metrics'
-import { smartGoalMetricLabels } from './status-styles'
 
 export interface AdTotals {
   spend: number
@@ -16,38 +14,6 @@ export interface AdTotals {
    * estimada = conversões ÷ leads p/ fechar 1 venda × ticket médio). */
   leadsToClose: number | null
   averageTicket: number | null
-}
-
-const AD_METRIC_TYPES = [
-  'leads',
-  'conversoes',
-  'cliques',
-  'impressoes',
-  'cpa',
-  'cpc',
-  'ctr',
-  'cpm',
-  'taxa_conversao',
-  'faturamento',
-  'roas',
-]
-
-export function isAdMetric(metricType: string | null): boolean {
-  return !!metricType && AD_METRIC_TYPES.includes(metricType)
-}
-
-/** `null` quando o metric_type não tem equivalente nas contas de anúncio.
- * "Leads" (Fase 37, Bloco 2) mantém o rótulo próprio: é a conversão que o
- * pixel/tag rastreia, número por natureza diferente de "respondeu meu
- * Google Forms" (mostrado separado, nunca somado). */
-export function adMetricLabel(metricType: string | null): string | null {
-  if (!isAdMetric(metricType)) return null
-  if (metricType === 'leads') return 'Conversões rastreadas pelo pixel/tag do Google/Meta Ads (últimos 30 dias)'
-  const label = smartGoalMetricLabels[metricType as string]
-  if (metricType === 'faturamento' || metricType === 'roas') {
-    return `${label} nas contas de anúncio (últimos 30 dias, receita estimada pela ficha do cliente)`
-  }
-  return `${label} nas contas de anúncio (últimos 30 dias)`
 }
 
 const round2 = (value: number | null) => (value == null ? null : Math.round(value * 100) / 100)

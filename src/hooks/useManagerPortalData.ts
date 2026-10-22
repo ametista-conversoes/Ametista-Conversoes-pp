@@ -3,6 +3,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import type { AdTotals } from '@/lib/ad-goal-metrics'
+import { isAutoGoalMetric } from '@/lib/goal-progress'
 import { aggregateAudienceInsights, type AudienceRawResponse } from '@/lib/audience-insights'
 import { fetchLinkedClientAccounts, linkClientAccount, resendClientInvite, unlinkClientAccount } from '@/lib/client-access'
 import type { PerformanceSnapshotRecord } from '@/hooks/useClientPortalData'
@@ -3260,7 +3261,18 @@ export interface ManagerSmartGoalRecord {
   current_value: number | null
   target_date: string | null
   status: string
+  /** Fase 54 — criada/adotada pelo "Montar funil": aparece na lista única
+   * do funil em vez de um card próprio. */
+  funnel: boolean
   client: { name: string } | null
+}
+
+/** Fase 54 — recalcula agora (mês corrente) o valor atual das metas
+ * automáticas do cliente, sem esperar o pg_cron da hora seguinte. Falha
+ * aqui não desfaz a meta salva: o cron corrige na próxima hora. */
+async function refreshClientGoals(clientId: string) {
+  const { error } = await supabase.rpc('refresh_smart_goals_from_ads', { p_client_id: clientId })
+  if (error) console.error('refresh_smart_goals_from_ads', error)
 }
 
 export function useAllSmartGoals() {
@@ -3294,6 +3306,7 @@ export function useCreateSmartGoal() {
     mutationFn: async (input: NewSmartGoalInput) => {
       const { error } = await supabase.from('smart_goals').insert(input)
       if (error) throw error
+      if (isAutoGoalMetric(input.metric_type)) await refreshClientGoals(input.client_id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-smart-goals'] })
@@ -3352,7 +3365,8 @@ export interface FunnelGoalWrite {
   title: string
   target_value: number
   /** Meta do mesmo tipo já existente pro cliente — só o valor-alvo é
-   * atualizado (prazo, progresso e status ficam como estão). */
+   * atualizado (prazo, progresso e status ficam como estão) e ela passa a
+   * fazer parte da lista do funil. */
   existingId: string | null
 }
 
@@ -3372,6 +3386,7 @@ export function useSaveFunnelGoals() {
           current_value: 0,
           target_date: targetDate,
           status: 'on_track',
+          funnel: true,
         }))
       if (inserts.length > 0) {
         const { error } = await supabase.from('smart_goals').insert(inserts)
@@ -3380,10 +3395,11 @@ export function useSaveFunnelGoals() {
       for (const g of goals.filter((goal) => goal.existingId)) {
         const { error } = await supabase
           .from('smart_goals')
-          .update({ target_value: g.target_value })
+          .update({ target_value: g.target_value, funnel: true })
           .eq('id', g.existingId as string)
         if (error) throw error
       }
+      await refreshClientGoals(clientId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-smart-goals'] })

@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import type { SmartGoalRecord } from '@/hooks/useClientPortalData'
+import { goalProgressPercent, isLowerBetterMetric } from '@/lib/goal-progress'
 import { smartGoalStatusLabels, smartGoalStatusStyles } from '@/lib/status-styles'
 
 interface GoalsProgressCardProps {
@@ -23,7 +24,7 @@ export function GoalsProgressCard({ goals }: GoalsProgressCardProps) {
         {goals.map((goal) => {
           const target = goal.target_value ?? 0
           const current = goal.current_value ?? 0
-          const percent = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0
+          const percent = goalProgressPercent(goal.metric_type, current, target)
           return (
             <div key={goal.id}>
               <div className="mb-1 flex items-center justify-between gap-2 text-sm">
@@ -34,7 +35,7 @@ export function GoalsProgressCard({ goals }: GoalsProgressCardProps) {
               </div>
               <Progress value={percent} />
               <p className="mt-1 text-xs text-muted-foreground">
-                {current} de {target} ({percent}%)
+                {isLowerBetterMetric(goal.metric_type) ? `${current} · meta: até ${target}` : `${current} de ${target}`} ({percent}%)
               </p>
             </div>
           )

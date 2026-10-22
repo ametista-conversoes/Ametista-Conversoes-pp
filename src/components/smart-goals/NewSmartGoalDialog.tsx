@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAllClients, useCreateSmartGoal } from '@/hooks/useManagerPortalData'
 import { getTodayIsoDate } from '@/lib/format'
+import { isAutoGoalMetric, isLowerBetterMetric } from '@/lib/goal-progress'
 import { smartGoalMetricLabels, smartGoalStatusLabels } from '@/lib/status-styles'
 
 const METRIC_OTHER = 'other'
@@ -93,7 +94,7 @@ export function NewSmartGoalDialog() {
         client_id: values.clientId,
         metric_type: metricType,
         target_value: Number(values.targetValue),
-        current_value: values.currentValue?.trim() ? Number(values.currentValue) : 0,
+        current_value: !isAutoGoalMetric(metricType) && values.currentValue?.trim() ? Number(values.currentValue) : 0,
         target_date: values.targetDate?.trim() ? values.targetDate : null,
         status: values.status,
       })
@@ -205,7 +206,7 @@ export function NewSmartGoalDialog() {
                 name="targetValue"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valor alvo</FormLabel>
+                    <FormLabel>{isLowerBetterMetric(selectedMetric) ? 'Valor alvo (até)' : 'Valor alvo'}</FormLabel>
                     <FormControl>
                       <Input type="number" step="any" {...field} />
                     </FormControl>
@@ -214,19 +215,25 @@ export function NewSmartGoalDialog() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="currentValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor atual</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="any" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {isAutoGoalMetric(selectedMetric) ? (
+                <p className="self-end text-xs text-muted-foreground">
+                  Valor atual calculado automaticamente pelo app (mês corrente, de hora em hora).
+                </p>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="currentValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor atual</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="any" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <FormField

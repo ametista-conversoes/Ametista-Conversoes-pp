@@ -3,6 +3,7 @@ import type { TrendPoint } from '@/components/charts/PerformanceTrendChart'
 import type { ChannelBreakdown } from '@/components/charts/SpendRevenueBarChart'
 import type { ClientRecord, ManagerAnalysisRecord, SmartGoalRecord } from '@/hooks/useClientPortalData'
 import { formatCurrency, formatDate, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
+import { goalProgressPercent, isLowerBetterMetric } from '@/lib/goal-progress'
 
 export interface MonthlyReportPdfData {
   spend: number | null
@@ -364,9 +365,14 @@ export function generateMonthlyReportPdf(
       // limitar em 100% — passar da meta mostra mais de 100% de
       // propósito, diferente da barra de progresso na tela (essa sim
       // limitada visualmente a 100%, já que é uma barra).
-      const probability = target > 0 ? (current / target) * 100 : 0
+      // Fase 54: CPA/CPC/CPM (menor é melhor) usam meta ÷ atual.
+      const probability = goalProgressPercent(goal.metric_type, current, target, { capped: false })
       doc.setTextColor(...COLOR_TEXT)
-      doc.text(`${goal.title} — ${current} de ${target}`, MARGIN_X + 2, y)
+      doc.text(
+        `${goal.title} — ${isLowerBetterMetric(goal.metric_type) ? `${current} (meta: até ${target})` : `${current} de ${target}`}`,
+        MARGIN_X + 2,
+        y,
+      )
       doc.setFont('helvetica', 'bold')
       doc.text(`${probability.toFixed(0)}%`, CONTENT_RIGHT, y, { align: 'right' })
       resetBodyStyle()

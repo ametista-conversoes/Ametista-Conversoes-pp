@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
 import { FunnelBuilderDialog } from '@/components/smart-goals/FunnelBuilderDialog'
-import { FunnelCard } from '@/components/smart-goals/FunnelCard'
+import { FunnelGoalsList } from '@/components/smart-goals/FunnelGoalsList'
 import { NewSmartGoalDialog } from '@/components/smart-goals/NewSmartGoalDialog'
 import { SmartGoalCard } from '@/components/smart-goals/SmartGoalCard'
 import { DeleteModeToggle } from '@/components/shared/DeleteModeToggle'
@@ -36,6 +36,12 @@ export default function SmartGoals() {
   const filteredGoals = (goals ?? []).filter(
     (goal) => clientFilter === ALL_CLIENTS || goal.client_id === clientFilter,
   )
+  // Fase 54 — metas do funil: uma lista por cliente; as demais, um card cada.
+  const funnelByClient = new Map<string, typeof filteredGoals>()
+  for (const goal of filteredGoals.filter((g) => g.funnel)) {
+    funnelByClient.set(goal.client_id, [...(funnelByClient.get(goal.client_id) ?? []), goal])
+  }
+  const cardGoals = filteredGoals.filter((goal) => !goal.funnel)
 
   return (
     <div className="space-y-6">
@@ -90,18 +96,20 @@ export default function SmartGoals() {
         </div>
       </div>
 
-      {clientFilter !== ALL_CLIENTS && (
-        <FunnelCard
-          clientName={(clients ?? []).find((client) => client.id === clientFilter)?.name ?? 'Cliente'}
-          goals={filteredGoals}
+      {Array.from(funnelByClient.entries()).map(([clientId, clientGoals]) => (
+        <FunnelGoalsList
+          key={clientId}
+          clientName={clientGoals[0].client?.name ?? 'Cliente'}
+          goals={clientGoals}
+          deleteMode={deleteMode}
         />
-      )}
+      ))}
 
       {filteredGoals.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada ainda.</p>}
 
       <div className="content-grid-container">
         <div className="content-grid gap-4">
-          {filteredGoals.map((goal) => (
+          {cardGoals.map((goal) => (
             <SmartGoalCard key={goal.id} goal={goal} deleteMode={deleteMode} />
           ))}
         </div>

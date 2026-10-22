@@ -879,3 +879,17 @@ Também conferido nesta rodada (sem achado, documentado como "ok"): zero uso de 
 - [ ] `approval-revision-task.spec.ts` falha na 1ª execução e passa na 2ª (instável) — investigar.
 - [ ] `fase50b-demo-data-buttons.spec.ts` termina em "Remover" e deixa os dados demo apagados — fazer terminar com "Recriar".
 - [ ] Checklist 1.1: trocar "Registrar funil e metas na aba Metas SMART" por "Metas SMART → Montar funil".
+
+## Fase 54 — Metas SMART: barra invertida, progresso automático e lista do funil
+
+Decisões do usuário: barra de CPA/CPC/CPM = meta ÷ atual; atualização automática no mês corrente (dia 1 até hoje); Leads = conversões dos anúncios, Leads Qualificados/Vendas = status marcados; só as metas do funil viram lista única.
+
+- [x] **`src/lib/goal-progress.ts`** (+ testes): `goalProgressPercent` — menor é melhor (CPA/CPC/CPM) usa meta ÷ atual (no alvo ou abaixo = 100%; meta R$45 e atual R$90 = 50%); demais, atual ÷ meta. Aplicado no card de meta, na lista do funil, no Portal do Cliente (`GoalsProgressCard`), na Central de Informações e no PDF (sem limite de 100%, como antes).
+- [x] **`migration-102`**: coluna `smart_goals.funnel` (metas do "Montar funil"; as antigas "Funil — …" foram marcadas) + `refresh_smart_goals_from_ads(p_client_id)` (security definer; `anon` sem execute; cliente recebe "Não autorizado") + pg_cron `refresh-smart-goals` às :10 de cada hora. Métricas automáticas: Orçamento mensal, Impressões, Cliques, Leads, Conversões, CPA, CPC, CTR, CPM, Taxa de Conversão, Faturamento e ROAS (estimados pela ficha), Leads Qualificados e Vendas. Ticket Médio e "Outro" continuam manuais. Meta concluída não muda. Prévia rodada antes em transação desfeita: só metas dos 2 clientes demo mudaram.
+- [x] Métrica automática: card mostra "Atualizada automaticamente", diálogo só edita o status, "Nova meta" esconde o "Valor atual". Criar meta automática / salvar o funil chama o recálculo na hora.
+- [x] Metas do funil numa **lista única por cliente** (`FunnelGoalsList`, substitui o `FunnelCard` e os cards "Funil — …"); metas avulsas seguem em cards. Removido código morto: `lead-metrics.ts`, sugestões "Usar" e `adMetricLabel`.
+- [x] tsc, 111 testes unitários, build e 34 e2e verdes (5 só passaram na 2ª execução, por lentidão do ambiente).
+
+### Pendente
+- [ ] Loja Aurora (e-commerce, 1 lead = 1 venda) não marca status de lead → meta de Vendas fica sempre 0. Avaliar Vendas = conversões quando "Leads p/ fechar 1 venda" = 1.
+- [ ] Clínica Sorriso (demo): meta "Qualificar 70% dos leads em até 48h" usa o tipo Leads Qualificados (contagem), mas o alvo é percentual — agora mostra 28 de 70. Corrigir o seed do demo-data.

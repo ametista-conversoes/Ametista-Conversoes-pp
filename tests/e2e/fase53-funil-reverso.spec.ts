@@ -57,8 +57,13 @@ test('Montar funil: modo verba calcula, salva e atualiza a meta existente', asyn
   await dialog.getByRole('button', { name: /^Salvar \d+ meta/ }).click()
   await expect(dialog).toBeHidden()
 
-  await expect(page.getByText(`Funil — ${CLIENT_NAME}`)).toBeVisible()
-  await expect(page.getByText('Funil — Cliques', { exact: true })).toBeVisible()
+  // Fase 54: metas do funil numa lista única (não um card por meta); CPA
+  // (menor é melhor) mostra "meta: até".
+  const list = page.locator('div.rounded-xl', { has: page.getByText(`Funil — ${CLIENT_NAME}`) })
+  await expect(list).toBeVisible()
+  await expect(list).toContainText('0 de 2.000')
+  await expect(list).toContainText('meta: até R$')
+  await expect(page.getByText('Funil — Cliques', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: 'test-results/fase53-funil-pagina.png', fullPage: true })
 
   const supabase = await getAuthenticatedClient('admin')

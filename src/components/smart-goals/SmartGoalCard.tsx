@@ -1,13 +1,13 @@
-import { Target } from 'lucide-react'
+import { RefreshCw, Target } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
-import { useClientAdTotals, useClientLeadStatusCounts, useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
-import { adMetricLabel, adMetricValue } from '@/lib/ad-goal-metrics'
+import { useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
 import { formatDate, getGoalDeadlineStatus } from '@/lib/format'
-import { isLeadCountMetric, leadCountForMetric, leadCountLabel } from '@/lib/lead-metrics'
+import { formatFunnelValue } from '@/lib/funnel'
+import { goalProgressPercent, isAutoGoalMetric, isLowerBetterMetric } from '@/lib/goal-progress'
 import {
   goalDeadlineStatusLabels,
   goalDeadlineStatusStyles,
@@ -22,35 +22,16 @@ interface SmartGoalCardProps {
   deleteMode?: boolean
 }
 
+/** Fase 54 — métricas que o app mede se atualizam sozinhas (mês corrente,
+ * de hora em hora — `refresh_smart_goals_from_ads`); CPA/CPC/CPM usam a
+ * barra invertida (meta ÷ atual). */
 export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
   const target = goal.target_value ?? 0
   const current = goal.current_value ?? 0
-  const percent = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0
+  const metric = goal.metric_type ?? ''
+  const percent = goalProgressPercent(goal.metric_type, current, target)
   const deadlineStatus = getGoalDeadlineStatus(goal.target_date, goal.status)
   const deleteGoal = useDeleteSmartGoal()
-
-  // Fase 35/36.2 — "Leads"/"Leads Qualificados"/"Vendas" são alimentados
-  // de verdade pelo status marcado em cada resposta de formulário (Parte
-  // 2 do Fechamento do Loop de Venda); mostra a contagem real ao lado do
-  // valor atual (que continua editável manualmente, igual às outras
-  // métricas) pra confirmar de relance se está desatualizado. "Leads"
-  // (bruto) conta QUALQUER resposta, sem validação — o rótulo deixa
-  // isso explícito (ver leadCountLabel) pra não ser confundido com um
-  // lead de verdade.
-  const isLeadMetric = isLeadCountMetric(goal.metric_type)
-  const leadCounts = useClientLeadStatusCounts(isLeadMetric ? goal.client_id : null)
-  const realCount = leadCountForMetric(goal.metric_type, leadCounts.data)
-
-  // Fase 37, Bloco 2 — "Leads" (bruto) ganha uma 2ª fonte de contagem
-  // real: conversão que o próprio Google/Meta Ads já rastreia (pixel/tag
-  // das campanhas vinculadas), ao lado da contagem de respostas de
-  // formulário — são números diferentes por natureza, mostrados
-  // separados, nunca somados um no outro. Fase 53 — mesmo princípio pras
-  // outras métricas que existem nas contas de anúncio (CPA, Cliques,
-  // Impressões...): valor real dos últimos 30 dias, só como referência.
-  const adMetric = adMetricLabel(goal.metric_type)
-  const adTotals = useClientAdTotals(adMetric ? goal.client_id : null)
-  const adValue = adTotals.data?.hasLinkedCampaigns ? adMetricValue(goal.metric_type, adTotals.data) : null
 
   return (
     <Card className="flex flex-col rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">
@@ -86,18 +67,16 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
         <div>
           <Progress value={percent} />
           <p className="mt-1 text-xs text-muted-foreground">
-            {current} de {target} ({percent}%)
+            {isLowerBetterMetric(goal.metric_type)
+              ? `${formatFunnelValue(metric, current)} · meta: até ${formatFunnelValue(metric, target)}`
+              : `${formatFunnelValue(metric, current)} de ${formatFunnelValue(metric, target)}`}{' '}
+            ({percent}%)
             {goal.target_date ? ` · Prazo: ${formatDate(goal.target_date)}` : ''}
           </p>
-          {realCount != null && realCount !== current && (
-            <p className="mt-1 text-xs text-purple-300">
-              {leadCountLabel(goal.metric_type)}: {realCount} (Ativos Digitais → Integrações → Ver respostas, ou o
-              cliente na aba Leads)
-            </p>
-          )}
-          {adMetric && adValue != null && (
-            <p className="mt-1 text-xs text-purple-300">
-              {adMetric}: {adValue}
+          {isAutoGoalMetric(goal.metric_type) && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-purple-300">
+              <RefreshCw className="h-3 w-3" />
+              Atualizada automaticamente (mês corrente, de hora em hora)
             </p>
           )}
         </div>

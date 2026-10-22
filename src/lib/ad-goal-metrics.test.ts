@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adMetricLabel, adMetricValue, type AdTotals } from './ad-goal-metrics'
+import { adMetricValue, type AdTotals } from './ad-goal-metrics'
 
 const totals: AdTotals = {
   spend: 1000,
@@ -31,14 +31,5 @@ describe('adMetricValue', () => {
     expect(adMetricValue('ctr', empty)).toBeNull()
     expect(adMetricValue('roas', { ...totals, leadsToClose: null })).toBeNull()
     expect(adMetricValue('ticket_medio', totals)).toBeNull()
-  })
-})
-
-describe('adMetricLabel', () => {
-  it('só tem rótulo pras métricas que existem nas contas de anúncio', () => {
-    expect(adMetricLabel('cpa')).toBe('CPA nas contas de anúncio (últimos 30 dias)')
-    expect(adMetricLabel('leads')).toContain('pixel/tag')
-    expect(adMetricLabel('vendas')).toBeNull()
-    expect(adMetricLabel(null)).toBeNull()
   })
 })
