@@ -26,6 +26,7 @@ import type { ActivityPlanScope, ClientWorkflowTemplateRecord } from '@/hooks/us
 import { useCreateClientWorkflowTemplate, useUpdateClientWorkflowTemplate } from '@/hooks/useManagerPortalData'
 import { RECURRENCE_NONE_VALUE, RECURRENCE_OPTIONS, recurrenceLabels, type RecurrenceInterval } from '@/lib/recurrence'
 import { planLabels } from '@/lib/status-styles'
+import { DetailsToggleField } from './DetailsToggleField'
 
 const PLAN_SCOPE_OPTIONS: ActivityPlanScope[] = ['validacao', 'escala', 'dominacao']
 const ALL_PLANS: ActivityPlanScope[] = [...PLAN_SCOPE_OPTIONS]
@@ -44,6 +45,7 @@ const templateFormSchema = z.object({
           .refine((v) => !v || /^\d+$/.test(v), 'Digite um número de dias válido'),
         recurrence: z.string(),
         planScope: z.array(z.enum(['validacao', 'escala', 'dominacao'])).min(1, 'Marque pelo menos um plano'),
+        details: z.string().optional(),
       }),
     )
     .min(1, 'Adicione pelo menos uma etapa'),
@@ -54,7 +56,7 @@ type TemplateFormValues = z.infer<typeof templateFormSchema>
 const EMPTY_VALUES: TemplateFormValues = {
   name: '',
   description: '',
-  steps: [{ title: '', category: '', due_days: '', recurrence: RECURRENCE_NONE_VALUE, planScope: ALL_PLANS }],
+  steps: [{ title: '', category: '', due_days: '', recurrence: RECURRENCE_NONE_VALUE, planScope: ALL_PLANS, details: '' }],
 }
 
 interface SortableStepRowProps {
@@ -104,6 +106,11 @@ function SortableStepRow({ id, index, control, onRemove, disableRemove }: Sortab
               <FormMessage />
             </FormItem>
           )}
+        />
+        <FormField
+          control={control}
+          name={`steps.${index}.details`}
+          render={({ field }) => <DetailsToggleField value={field.value} onChange={field.onChange} />}
         />
         <FormField
           control={control}
@@ -229,6 +236,7 @@ export function ClientWorkflowTemplateFormDialog({ trigger, template }: ClientWo
                 due_days: step.due_days ? String(step.due_days) : '',
                 recurrence: step.recurrence ?? RECURRENCE_NONE_VALUE,
                 planScope: step.plan_scope && step.plan_scope.length > 0 ? step.plan_scope : ALL_PLANS,
+                details: step.details ?? '',
               })),
             }
           : EMPTY_VALUES,
@@ -246,6 +254,7 @@ export function ClientWorkflowTemplateFormDialog({ trigger, template }: ClientWo
         due_days: step.due_days?.trim() ? Number(step.due_days) : null,
         recurrence: step.recurrence === RECURRENCE_NONE_VALUE ? null : (step.recurrence as RecurrenceInterval),
         plan_scope: step.planScope,
+        ...(step.details?.trim() ? { details: step.details.trim() } : {}),
       })),
     }
     try {
@@ -322,7 +331,14 @@ export function ClientWorkflowTemplateFormDialog({ trigger, template }: ClientWo
                 variant="secondary"
                 className="w-full"
                 onClick={() =>
-                  append({ title: '', category: '', due_days: '', recurrence: RECURRENCE_NONE_VALUE, planScope: ALL_PLANS })
+                  append({
+                    title: '',
+                    category: '',
+                    due_days: '',
+                    recurrence: RECURRENCE_NONE_VALUE,
+                    planScope: ALL_PLANS,
+                    details: '',
+                  })
                 }
               >
                 <Plus className="h-4 w-4" />

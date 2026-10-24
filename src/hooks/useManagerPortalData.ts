@@ -1825,6 +1825,8 @@ export interface ManagerClientTaskRecord {
   recurrence_interval: RecurrenceInterval | null
   completed_at: string | null
   archived_at: string | null
+  /** Fase 56 — "como fazer", copiado do Workflow do Cliente ao aplicar. */
+  details: string | null
   client: { name: string; plan: string | null } | null
 }
 
@@ -1835,7 +1837,7 @@ export function useAllClientTasks() {
       const { data, error } = await supabase
         .from('client_tasks')
         .select(
-          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
+          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, archived_at, details, client:clients(name, plan)',
         )
         .is('archived_at', null)
         .order('due_date', { ascending: true, nullsFirst: false })
@@ -1857,7 +1859,7 @@ export function useArchivedClientTasks() {
       const { data, error } = await supabase
         .from('client_tasks')
         .select(
-          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
+          'id, title, description, client_id, project_id, status, priority, category, due_date, recurrence_interval, completed_at, archived_at, details, client:clients(name, plan)',
         )
         .not('archived_at', 'is', null)
         .order('archived_at', { ascending: false })
@@ -2084,6 +2086,9 @@ export function useSetClientChosenPlatform() {
 export interface WorkflowTemplateStep {
   title: string
   category: string
+  /** Fase 56 — "como fazer" (texto puro); só o Workflow do Cliente copia
+   * pra `client_tasks.details` ao aplicar. */
+  details?: string | null
   /** Prazo em dias — quando aplicado, a tarefa nasce com due_date =
    * hoje + esse número (calculado no banco, ver apply_workflow /
    * apply_client_workflow). Sem valor, a tarefa não ganha prazo. */
@@ -2291,6 +2296,8 @@ export type ActivityPlatformScope = 'meta' | 'google'
 export interface ActivityTemplateItem {
   title: string
   category?: string | null
+  /** Fase 56 — "como fazer" (texto puro), copiado pra instância ao aplicar. */
+  details?: string | null
   /** Fase 29 — em quais planos do cliente (`clients.plan`) esse item entra
    * ao aplicar o Workflow. Ausente/vazio é tratado como "todos os planos"
    * (dado antigo, de antes desta fase). */
@@ -2429,6 +2436,8 @@ export interface ActivityChecklistItemRecord {
   completed: boolean
   step_order: number
   source_template_name: string | null
+  /** Fase 56 — "como fazer", copiado do modelo ao aplicar. */
+  details: string | null
   /** Fase 31/31b — os 2 juntos aparecem pra qualquer plataforma; só 1
    * aparece pro cliente Validação que escolheu essa plataforma. */
   platform_scope: ActivityPlatformScope[]
@@ -2449,7 +2458,7 @@ export function useActivityChecklistItems() {
       const { data, error } = await supabase
         .from('activity_checklist_items')
         .select(
-          'id, client_id, project_id, title, category, completed, step_order, source_template_name, platform_scope, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
+          'id, client_id, project_id, title, category, completed, step_order, source_template_name, details, platform_scope, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
         )
         .is('archived_at', null)
         .order('step_order', { ascending: true })
@@ -2472,7 +2481,7 @@ export function useArchivedActivityChecklistItems() {
       const { data, error } = await supabase
         .from('activity_checklist_items')
         .select(
-          'id, client_id, project_id, title, category, completed, step_order, source_template_name, platform_scope, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
+          'id, client_id, project_id, title, category, completed, step_order, source_template_name, details, platform_scope, recurrence_interval, completed_at, archived_at, client:clients(name, plan)',
         )
         .not('archived_at', 'is', null)
         .order('archived_at', { ascending: false })

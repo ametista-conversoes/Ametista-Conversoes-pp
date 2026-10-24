@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
+import { ItemDetailsButton } from '@/components/workflows/ItemDetailsButton'
 import type {
   ActivityPlanScope,
   ActivityPlatformScope,
@@ -144,6 +145,7 @@ export function ActivityTemplateCard({ template, deleteMode, canEdit, linkedWork
                   title={dotTitleForScope(item.plan_scope)}
                 />
                 <span className="min-w-0">{item.title}</span>
+                <ItemDetailsButton title={item.title} details={item.details} />
                 {platformTag && (
                   <Badge className="shrink-0 border-[#1A2540] bg-secondary/50 text-[10px] text-muted-foreground">
                     {platformTag}

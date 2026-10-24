@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
+import { ItemDetailsButton } from '@/components/workflows/ItemDetailsButton'
 import type { ActivityPlanScope, ClientWorkflowTemplateRecord } from '@/hooks/useManagerPortalData'
 import { useDeleteClientWorkflowTemplate } from '@/hooks/useManagerPortalData'
 import { recurrenceShortLabels } from '@/lib/recurrence'
@@ -68,6 +69,7 @@ export function ClientWorkflowCard({ template, deleteMode, canEdit }: ClientWork
               <li key={step.title} className="flex items-center gap-2 text-sm text-foreground">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
                 <span className="min-w-0">{step.title}</span>
+                <ItemDetailsButton title={step.title} details={step.details} />
                 {step.due_days ? <span className="shrink-0 text-xs text-muted-foreground">· {step.due_days}d</span> : null}
                 {step.recurrence && (
                   <Badge className="shrink-0 gap-1 border-purple-600/20 bg-purple-600/10 text-[10px] text-purple-300">

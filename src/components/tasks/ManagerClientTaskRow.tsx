@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
+import { ItemDetailsButton } from '@/components/workflows/ItemDetailsButton'
 import { ClientTaskFormDialog } from './ClientTaskFormDialog'
 import type { ManagerClientTaskRecord } from '@/hooks/useManagerPortalData'
 import { useDeleteManagerClientTask, useUpdateClientTaskStatusAsManager } from '@/hooks/useManagerPortalData'
@@ -46,8 +47,9 @@ export function ManagerClientTaskRow({ task, showClientName, deleteMode }: Manag
       )}
     >
       <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-sm font-medium', status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground')}>
-          {task.title}
+        <p className={cn('flex items-center gap-1 text-sm font-medium', status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground')}>
+          <span className="truncate">{task.title}</span>
+          <ItemDetailsButton title={task.title} details={task.details} />
         </p>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {showClientName && (task.client?.name ?? 'Sem cliente')}

@@ -26,6 +26,7 @@ import type { ActivityPlanScope, ActivityPlatformScope, ActivityTemplateRecord }
 import { useCreateActivityTemplate, useUpdateActivityTemplate } from '@/hooks/useManagerPortalData'
 import { RECURRENCE_NONE_VALUE, RECURRENCE_OPTIONS, recurrenceLabels, type RecurrenceInterval } from '@/lib/recurrence'
 import { planLabels } from '@/lib/status-styles'
+import { DetailsToggleField } from './DetailsToggleField'
 
 const PLAN_SCOPE_OPTIONS: ActivityPlanScope[] = ['validacao', 'escala', 'dominacao']
 const ALL_PLANS: ActivityPlanScope[] = [...PLAN_SCOPE_OPTIONS]
@@ -49,6 +50,7 @@ const templateFormSchema = z.object({
         planScope: z.array(z.enum(['validacao', 'escala', 'dominacao'])).min(1, 'Marque pelo menos um plano'),
         platformScope: z.array(z.enum(['meta', 'google'])).min(1, 'Marque pelo menos uma plataforma'),
         recurrence: z.string(),
+        details: z.string().optional(),
       }),
     )
     .min(1, 'Adicione pelo menos um item'),
@@ -59,7 +61,9 @@ type TemplateFormValues = z.infer<typeof templateFormSchema>
 const EMPTY_VALUES: TemplateFormValues = {
   name: '',
   description: '',
-  items: [{ title: '', category: '', planScope: ALL_PLANS, platformScope: ALL_PLATFORMS, recurrence: RECURRENCE_NONE_VALUE }],
+  items: [
+    { title: '', category: '', planScope: ALL_PLANS, platformScope: ALL_PLATFORMS, recurrence: RECURRENCE_NONE_VALUE, details: '' },
+  ],
 }
 
 interface SortableActivityItemRowProps {
@@ -109,6 +113,11 @@ function SortableActivityItemRow({ id, index, control, onRemove, disableRemove }
               <FormMessage />
             </FormItem>
           )}
+        />
+        <FormField
+          control={control}
+          name={`items.${index}.details`}
+          render={({ field }) => <DetailsToggleField value={field.value} onChange={field.onChange} />}
         />
         <FormField
           control={control}
@@ -247,6 +256,7 @@ export function ActivityTemplateFormDialog({ trigger, template }: ActivityTempla
                 platformScope:
                   item.platform_scope && item.platform_scope.length > 0 ? item.platform_scope : ALL_PLATFORMS,
                 recurrence: item.recurrence ?? RECURRENCE_NONE_VALUE,
+                details: item.details ?? '',
               })),
             }
           : EMPTY_VALUES,
@@ -264,6 +274,7 @@ export function ActivityTemplateFormDialog({ trigger, template }: ActivityTempla
         plan_scope: item.planScope,
         platform_scope: item.platformScope,
         recurrence: item.recurrence === RECURRENCE_NONE_VALUE ? null : (item.recurrence as RecurrenceInterval),
+        ...(item.details?.trim() ? { details: item.details.trim() } : {}),
       })),
     }
     try {
@@ -346,6 +357,7 @@ export function ActivityTemplateFormDialog({ trigger, template }: ActivityTempla
                     planScope: ALL_PLANS,
                     platformScope: ALL_PLATFORMS,
                     recurrence: RECURRENCE_NONE_VALUE,
+                    details: '',
                   })
                 }
               >

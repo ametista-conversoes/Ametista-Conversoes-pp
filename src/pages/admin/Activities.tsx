@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ItemDetailsButton } from '@/components/workflows/ItemDetailsButton'
 import type { ActivityChecklistItemRecord, ManagerClientRecord } from '@/hooks/useManagerPortalData'
 import {
   useAllClients,
@@ -358,8 +359,9 @@ export default function Activities() {
                                 }
                               />
                               <div className="min-w-0">
-                                <p className={`break-words text-sm ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                                  {item.title}
+                                <p className={`flex items-start gap-1 break-words text-sm ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                                  <span className="min-w-0">{item.title}</span>
+                                  <ItemDetailsButton title={item.title} details={item.details} />
                                 </p>
                                 {(item.category || item.recurrence_interval) && (
                                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

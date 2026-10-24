@@ -69,6 +69,8 @@ export interface TaskRecord {
    * aparecer como "todo" sozinha depois do intervalo vencer). */
   recurrence_interval: string | null
   completed_at: string | null
+  /** Fase 56 — "como fazer", copiado do Workflow do Cliente ao aplicar. */
+  details: string | null
 }
 
 export interface MeetingRecord {

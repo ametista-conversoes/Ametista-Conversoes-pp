@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
+import { ItemDetailsButton } from '@/components/workflows/ItemDetailsButton'
 import type { TaskRecord } from '@/hooks/useClientPortalData'
 import { formatDate, getTodayIsoDate } from '@/lib/format'
 import { taskPriorityLabels, taskStatusLabels, taskStatusStyles } from '@/lib/status-styles'
@@ -75,8 +76,9 @@ export function TaskList({
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className={`truncate text-sm font-medium ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                  {task.title}
+                <p className={`flex items-center gap-1 text-sm font-medium ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                  <span className="truncate">{task.title}</span>
+                  <ItemDetailsButton title={task.title} details={task.details} />
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {taskPriorityLabels[task.priority] ?? task.priority} · Prazo: {formatDate(task.due_date)}
