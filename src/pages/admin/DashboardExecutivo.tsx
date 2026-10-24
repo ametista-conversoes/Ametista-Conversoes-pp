@@ -67,7 +67,7 @@ export default function DashboardExecutivo() {
         </span>
         <h1 className="mt-2 text-2xl font-semibold text-foreground md:text-3xl">
           Dashboard{' '}
-          <span className="bg-gradient-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
             Executivo
           </span>
         </h1>

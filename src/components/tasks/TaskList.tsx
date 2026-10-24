@@ -76,8 +76,8 @@ export function TaskList({
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className={`flex items-center gap-1 text-sm font-medium ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                  <span className="truncate">{task.title}</span>
+                <p className={`flex items-center gap-1 text-sm font-medium ${isDone ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  <span className={`truncate ${isDone ? 'line-through' : ''}`}>{task.title}</span>
                   <ItemDetailsButton title={task.title} details={task.details} />
                 </p>
                 <p className="text-xs text-muted-foreground">

@@ -78,7 +78,7 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn("space-y-2", className)} {...props} />
+      <div ref={ref} className={cn("grid gap-2", className)} {...props} />
     </FormItemContext.Provider>
   )
 })
@@ -93,7 +93,10 @@ const FormLabel = React.forwardRef<
   return (
     <Label
       ref={ref}
-      className={cn(error && "text-destructive", className)}
+      // Tailwind 4: no grid do FormItem o rótulo vira bloco com leading-none
+      // (14px); no v3 ele herdava a linha de 24px do container. leading-6
+      // mantém o mesmo espaçamento de antes em todos os formulários.
+      className={cn("leading-6", error && "text-destructive", className)}
       htmlFor={formItemId}
       {...props}
     />

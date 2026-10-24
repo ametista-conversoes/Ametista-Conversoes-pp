@@ -359,8 +359,8 @@ export default function Activities() {
                                 }
                               />
                               <div className="min-w-0">
-                                <p className={`flex items-start gap-1 break-words text-sm ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                                  <span className="min-w-0">{item.title}</span>
+                                <p className={`flex items-start gap-1 wrap-break-word text-sm ${isDone ? 'text-muted-foreground' : 'text-foreground'}`}>
+                                  <span className={`min-w-0 ${isDone ? 'line-through' : ''}`}>{item.title}</span>
                                   <ItemDetailsButton title={item.title} details={item.details} />
                                 </p>
                                 {(item.category || item.recurrence_interval) && (

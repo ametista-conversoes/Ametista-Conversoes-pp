@@ -47,8 +47,8 @@ export function ManagerClientTaskRow({ task, showClientName, deleteMode }: Manag
       )}
     >
       <div className="min-w-0 flex-1">
-        <p className={cn('flex items-center gap-1 text-sm font-medium', status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground')}>
-          <span className="truncate">{task.title}</span>
+        <p className={cn('flex items-center gap-1 text-sm font-medium', status === 'done' ? 'text-muted-foreground' : 'text-foreground')}>
+          <span className={cn('truncate', status === 'done' && 'line-through')}>{task.title}</span>
           <ItemDetailsButton title={task.title} details={task.details} />
         </p>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

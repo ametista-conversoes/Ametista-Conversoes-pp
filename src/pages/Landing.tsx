@@ -40,7 +40,7 @@ export default function Landing() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b border-[#1A2540]/60 bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-[#1A2540]/60 bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Ametista Conversões" className="h-9 w-9 rounded-lg" />
@@ -71,7 +71,7 @@ export default function Landing() {
               className="h-full w-full object-cover object-[80%_center] blur-md md:blur-none"
             />
             <div className="absolute inset-0 bg-background/70 md:hidden" />
-            <div className="absolute inset-0 hidden bg-gradient-to-r from-background via-background/85 to-background/20 md:block" />
+            <div className="absolute inset-0 hidden bg-linear-to-r from-background via-background/85 to-background/20 md:block" />
           </div>
 
           <div className="relative mx-auto w-full max-w-5xl px-4 py-20 md:min-h-[560px] md:py-28">
@@ -79,9 +79,9 @@ export default function Landing() {
               <span className="inline-flex items-center rounded-full border border-purple-600/30 bg-purple-600/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-purple-400">
                 Portal interno da agência
               </span>
-              <h1 className="mt-5 text-4xl font-semibold leading-tight text-foreground md:text-5xl">
+              <h1 className="mt-5 text-4xl font-semibold leading-tight text-foreground md:text-5xl md:leading-none">
                 A plataforma interna da agência{' '}
-                <span className="bg-gradient-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
+                <span className="bg-linear-to-r from-purple-300 to-purple-500 bg-clip-text text-transparent">
                   Ametista Conversões
                 </span>
               </h1>

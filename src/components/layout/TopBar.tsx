@@ -39,7 +39,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
 
   return (
     <header
-      className="z-30 flex min-h-16 shrink-0 items-center gap-4 border-b border-secondary bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-6"
+      className="z-30 flex min-h-16 shrink-0 items-center gap-4 border-b border-secondary bg-background/95 px-4 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:px-6"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <Button

@@ -28,7 +28,7 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         day: "h-9 w-9 text-center text-sm p-0 relative",
         day_button:
           "h-9 w-9 rounded-md text-foreground hover:bg-secondary transition-colors aria-selected:opacity-100",
-        selected: "[&>button]:bg-purple-600 [&>button]:text-white [&>button]:hover:bg-purple-600",
+        selected: "[&>button]:bg-purple-600 [&>button]:text-white hover:[&>button]:bg-purple-600",
         today: "[&>button]:border [&>button]:border-purple-600/50",
         outside: "text-muted-foreground/40",
         disabled: "text-muted-foreground/30 opacity-50",

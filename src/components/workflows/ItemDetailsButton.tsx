@@ -9,7 +9,7 @@ const URL_PATTERN = /(https?:\/\/[^\s)]+)/g
 function DetailsText({ text }: { text: string }) {
   const parts = text.split(URL_PATTERN)
   return (
-    <p className="whitespace-pre-line break-words text-sm leading-relaxed text-foreground">
+    <p className="whitespace-pre-line wrap-break-word text-sm leading-relaxed text-foreground">
       {parts.map((part, i) =>
         i % 2 === 1 ? (
           <a
