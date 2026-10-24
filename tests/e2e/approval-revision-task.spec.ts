@@ -55,7 +55,19 @@ test('cliente pede revisão de uma aprovação e a agência recebe uma tarefa au
 
   await expect(approvalRow.getByText('Revisão pedida')).toBeVisible()
 
+  // A tarefa nasce de um gatilho no banco — confere lá primeiro (separa
+  // "gatilho não rodou" de "tela ainda carregando").
+  const gestorAuth = await getAuthenticatedClient('gestor')
+  await expect
+    .poll(async () => {
+      const { data } = await gestorAuth.from('tasks').select('id').eq('title', REVIEW_TASK_TITLE)
+      return data?.length ?? 0
+    }, { timeout: 15_000 })
+    .toBe(1)
+
+  // Primeiro arquivo da suíte: pega o servidor de dev ainda compilando a
+  // Central de Informações pela 1ª vez — por isso o tempo maior só aqui.
   await loginAs(page, 'gestor')
   await page.goto(`/clients/${clientId}`)
-  await expect(page.getByText(REVIEW_TASK_TITLE, { exact: true })).toBeVisible()
+  await expect(page.getByText(REVIEW_TASK_TITLE, { exact: true })).toBeVisible({ timeout: 20_000 })
 })
