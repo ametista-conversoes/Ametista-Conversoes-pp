@@ -6,8 +6,7 @@ import { DeleteItemButton } from '@/components/shared/DeleteItemButton'
 import type { ManagerSmartGoalRecord } from '@/hooks/useManagerPortalData'
 import { useDeleteSmartGoal } from '@/hooks/useManagerPortalData'
 import { formatDate, getGoalDeadlineStatus } from '@/lib/format'
-import { formatFunnelValue } from '@/lib/funnel'
-import { goalProgressPercent, isAutoGoalMetric, isLowerBetterMetric } from '@/lib/goal-progress'
+import { formatGoalValue, goalProgressPercent, isAutoGoalMetric, isLowerBetterMetric } from '@/lib/goal-progress'
 import {
   goalDeadlineStatusLabels,
   goalDeadlineStatusStyles,
@@ -68,8 +67,8 @@ export function SmartGoalCard({ goal, deleteMode }: SmartGoalCardProps) {
           <Progress value={percent} />
           <p className="mt-1 text-xs text-muted-foreground">
             {isLowerBetterMetric(goal.metric_type)
-              ? `${formatFunnelValue(metric, current)} · meta: até ${formatFunnelValue(metric, target)}`
-              : `${formatFunnelValue(metric, current)} de ${formatFunnelValue(metric, target)}`}{' '}
+              ? `${formatGoalValue(metric, current, goal.unit)} · meta: até ${formatGoalValue(metric, target, goal.unit)}`
+              : `${formatGoalValue(metric, current, goal.unit)} de ${formatGoalValue(metric, target, goal.unit)}`}{' '}
             ({percent}%)
             {goal.target_date ? ` · Prazo: ${formatDate(goal.target_date)}` : ''}
           </p>

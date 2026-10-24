@@ -81,7 +81,7 @@ import {
 } from '@/hooks/useManagerPortalData'
 import { CASSIE_MODES, type CassieMode } from '@/lib/cassie-modes'
 import { formatDate, formatDateTime } from '@/lib/format'
-import { goalProgressPercent, isLowerBetterMetric } from '@/lib/goal-progress'
+import { formatGoalValue, goalProgressPercent, isLowerBetterMetric } from '@/lib/goal-progress'
 import { getClientRiskDetails } from '@/lib/client-risk'
 import { effectiveActivityCompleted, isCompletionStale, recurrenceShortLabels, type RecurrenceInterval } from '@/lib/recurrence'
 import { uploadClientLogo } from '@/lib/storage'
@@ -527,7 +527,10 @@ export default function ClientDetail() {
                     </div>
                     <Progress value={percent} className="mt-1" />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {isLowerBetterMetric(goal.metric_type) ? `${current} · meta: até ${target}` : `${current} de ${target}`} ({percent}%)
+                      {isLowerBetterMetric(goal.metric_type)
+                        ? `${formatGoalValue(goal.metric_type, current, goal.unit)} · meta: até ${formatGoalValue(goal.metric_type, target, goal.unit)}`
+                        : `${formatGoalValue(goal.metric_type, current, goal.unit)} de ${formatGoalValue(goal.metric_type, target, goal.unit)}`}{' '}
+                      ({percent}%)
                       {goal.target_date ? ` · Prazo: ${formatDate(goal.target_date)}` : ''}
                     </p>
                   </div>

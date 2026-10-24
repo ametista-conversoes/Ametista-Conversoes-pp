@@ -2,7 +2,6 @@
 // Leads → Leads Qualificados → Vendas) calculado de trás pra frente a partir
 // da verba OU da meta de vendas. O funil não tem tabela própria: cada etapa
 // vira (ou atualiza) uma meta SMART do cliente — ver `FUNNEL_GOAL_METRICS`.
-import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from './format'
 import { computeRevenueFromLeads, computeRoas } from './metrics'
 
 export type FunnelMode = 'verba' | 'vendas'
@@ -117,14 +116,6 @@ export function funnelGoalTargets(inputs: FunnelInputs, result: FunnelResult): R
     faturamento: result.revenue,
     roas: result.roas,
   }
-}
-
-/** Formato de exibição de cada meta do funil. */
-export function formatFunnelValue(metric: string, value: number | null | undefined): string {
-  if (metric === 'orcamento' || metric === 'cpa' || metric === 'faturamento') return formatCurrency(value)
-  if (metric === 'ctr' || metric === 'taxa_conversao') return formatPercent(value)
-  if (metric === 'roas') return formatMultiplier(value)
-  return formatNumber(value)
 }
 
 /** Último dia do mês corrente (YYYY-MM-DD) — prazo padrão das metas do funil. */

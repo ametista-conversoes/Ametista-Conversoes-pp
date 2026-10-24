@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { goalProgressPercent, isAutoGoalMetric, isLowerBetterMetric } from './goal-progress'
+import { formatGoalValue, goalProgressPercent, isAutoGoalMetric, isLowerBetterMetric } from './goal-progress'
 
 describe('goalProgressPercent', () => {
   it('maior é melhor: atual ÷ meta, limitado a 100 na barra', () => {
@@ -36,5 +36,20 @@ describe('classificação das métricas', () => {
     expect(isAutoGoalMetric('vendas')).toBe(true)
     expect(isAutoGoalMetric('ticket_medio')).toBe(false)
     expect(isAutoGoalMetric('ltv')).toBe(false)
+  })
+})
+
+describe('formatGoalValue', () => {
+  it('tipo conhecido define o formato', () => {
+    expect(formatGoalValue('cpa', 45)).toMatch(/R\$\s?45,00/)
+    expect(formatGoalValue('ctr', 2.5)).toBe('2,5%')
+    expect(formatGoalValue('roas', 4)).toMatch(/^4(,0)?x$/)
+    expect(formatGoalValue('cliques', 2000)).toBe('2.000')
+  })
+
+  it('meta "Outro" usa a unidade escolhida', () => {
+    expect(formatGoalValue('ltv', 1500, 'currency')).toMatch(/R\$\s?1\.500,00/)
+    expect(formatGoalValue('margem', 30, 'percent')).toBe('30,0%')
+    expect(formatGoalValue('indicacoes', 12, 'count')).toBe('12')
   })
 })

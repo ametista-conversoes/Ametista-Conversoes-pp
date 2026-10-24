@@ -22,12 +22,12 @@ import {
   computeFunnel,
   endOfMonthIso,
   FUNNEL_GOAL_METRICS,
-  formatFunnelValue,
   funnelGoalTargets,
   requiredConversionRate,
   type FunnelGoalMetric,
   type FunnelMode,
 } from '@/lib/funnel'
+import { formatGoalValue } from '@/lib/goal-progress'
 import { computeRateMetrics } from '@/lib/metrics'
 import { smartGoalMetricLabels } from '@/lib/status-styles'
 
@@ -200,7 +200,16 @@ export function FunnelBuilderDialog({ goals, defaultClientId }: FunnelBuilderDia
   async function handleSave() {
     if (!clientId || writes.length === 0) return
     try {
-      await saveGoals.mutateAsync({ clientId, targetDate: endOfMonthIso(getTodayIsoDate()), goals: writes })
+      await saveGoals.mutateAsync({
+        clientId,
+        targetDate: endOfMonthIso(getTodayIsoDate()),
+        goals: writes,
+        // Só o que foi preenchido — campo vazio no funil não apaga a ficha.
+        ficha: {
+          ...(inputs.leadsToClose != null ? { leads_to_close: inputs.leadsToClose } : {}),
+          ...(inputs.averageTicket != null ? { average_ticket: inputs.averageTicket } : {}),
+        },
+      })
       setOpen(false)
     } catch {
       // erro já avisado pelo onError do hook
@@ -292,10 +301,10 @@ export function FunnelBuilderDialog({ goals, defaultClientId }: FunnelBuilderDia
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Com o CPC real dos últimos 30 dias ({formatFunnelValue('cpa', realRates?.cpc)}), esse CPA-alvo exige
-                    taxa de conversão de {formatFunnelValue('taxa_conversao', requiredRate)} — o funil considera{' '}
-                    {formatFunnelValue('taxa_conversao', inputs.conversionRate)}. Ou o CPC precisa cair para até{' '}
-                    {formatFunnelValue('cpa', result?.impliedCpc)}.
+                    Com o CPC real dos últimos 30 dias ({formatGoalValue('cpa', realRates?.cpc)}), esse CPA-alvo exige
+                    taxa de conversão de {formatGoalValue('taxa_conversao', requiredRate)} — o funil considera{' '}
+                    {formatGoalValue('taxa_conversao', inputs.conversionRate)}. Ou o CPC precisa cair para até{' '}
+                    {formatGoalValue('cpa', result?.impliedCpc)}.
                   </span>
                 </div>
               )}
@@ -327,8 +336,8 @@ export function FunnelBuilderDialog({ goals, defaultClientId }: FunnelBuilderDia
                               />
                             </td>
                             <td className="p-3 text-foreground">{smartGoalMetricLabels[metric]}</td>
-                            <td className="p-3 text-right font-medium text-foreground">{formatFunnelValue(metric, value)}</td>
-                            <td className="p-3 text-right text-muted-foreground">{formatFunnelValue(metric, realValue(metric))}</td>
+                            <td className="p-3 text-right font-medium text-foreground">{formatGoalValue(metric, value)}</td>
+                            <td className="p-3 text-right text-muted-foreground">{formatGoalValue(metric, realValue(metric))}</td>
                             <td className="p-3 text-right text-xs text-muted-foreground">
                               {value == null ? 'falta dado' : existing ? 'atualiza' : 'cria'}
                             </td>
@@ -351,7 +360,7 @@ export function FunnelBuilderDialog({ goals, defaultClientId }: FunnelBuilderDia
         <DialogFooter className="items-center gap-2 sm:justify-between">
           <p className="text-xs text-muted-foreground">
             {writes.length > 0
-              ? `${writes.length - updateCount} nova(s), ${updateCount} atualizada(s) só no valor-alvo. Novas com prazo no fim do mês.`
+              ? `${writes.length - updateCount} nova(s), ${updateCount} atualizada(s) só no valor-alvo. Novas com prazo no fim do mês. Leads p/ fechar 1 venda e ticket médio também vão para a ficha do cliente.`
               : ''}
           </p>
           <Button type="button" onClick={handleSave} disabled={writes.length === 0 || saveGoals.isPending}>

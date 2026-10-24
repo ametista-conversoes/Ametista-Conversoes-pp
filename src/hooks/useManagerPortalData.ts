@@ -3264,6 +3264,8 @@ export interface ManagerSmartGoalRecord {
   /** Fase 54 — criada/adotada pelo "Montar funil": aparece na lista única
    * do funil em vez de um card próprio. */
   funnel: boolean
+  /** Fase 55 — só em meta "Outro": count | percent | currency. */
+  unit: string | null
   client: { name: string } | null
 }
 
@@ -3294,6 +3296,7 @@ export interface NewSmartGoalInput {
   title: string
   client_id: string
   metric_type: string | null
+  unit?: string | null
   target_value: number | null
   current_value: number | null
   target_date: string | null
@@ -3375,7 +3378,23 @@ export interface FunnelGoalWrite {
 export function useSaveFunnelGoals() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ clientId, targetDate, goals }: { clientId: string; targetDate: string; goals: FunnelGoalWrite[] }) => {
+    mutationFn: async ({
+      clientId,
+      targetDate,
+      goals,
+      ficha,
+    }: {
+      clientId: string
+      targetDate: string
+      goals: FunnelGoalWrite[]
+      /** Leads p/ fechar 1 venda e ticket médio digitados no funil também
+       * valem pra ficha do cliente (Central de Informações). */
+      ficha?: { leads_to_close?: number; average_ticket?: number }
+    }) => {
+      if (ficha && Object.keys(ficha).length > 0) {
+        const { error } = await supabase.from('clients').update(ficha).eq('id', clientId)
+        if (error) throw error
+      }
       const inserts = goals
         .filter((g) => !g.existingId)
         .map((g) => ({
@@ -3403,6 +3422,7 @@ export function useSaveFunnelGoals() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-smart-goals'] })
+      queryClient.invalidateQueries({ queryKey: ['manager-clients'] })
       toast.success('Metas do funil salvas.')
     },
     onError: () => {

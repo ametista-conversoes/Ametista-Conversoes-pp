@@ -8,6 +8,8 @@
 //   (mês corrente) por `refresh_smart_goals_from_ads` (migration-102) —
 //   a lista abaixo TEM que bater com a da função.
 
+import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from './format'
+
 const LOWER_IS_BETTER = ['cpa', 'cpc', 'cpm']
 
 const AUTO_METRICS = [
@@ -49,4 +51,29 @@ export function goalProgressPercent(
   const raw = isLowerBetterMetric(metricType) ? (c > 0 ? (t / c) * 100 : 0) : (c / t) * 100
   const rounded = Math.round(raw)
   return capped ? Math.min(100, rounded) : rounded
+}
+
+export type GoalUnit = 'count' | 'percent' | 'currency'
+
+export const goalUnitLabels: Record<GoalUnit, string> = {
+  count: 'Contagem',
+  percent: 'Porcentagem',
+  currency: 'Dinheiro (R$)',
+}
+
+/** Formato de exibição do valor de uma meta. Tipo conhecido define o
+ * formato; meta "Outro" usa a unidade escolhida ao criar (Fase 55). */
+export function formatGoalValue(
+  metricType: string | null | undefined,
+  value: number | null | undefined,
+  unit?: GoalUnit | string | null,
+): string {
+  if (unit === 'currency') return formatCurrency(value)
+  if (unit === 'percent') return formatPercent(value)
+  if (unit === 'count') return formatNumber(value)
+  const metric = metricType ?? ''
+  if (['orcamento', 'cpa', 'cpc', 'cpm', 'faturamento', 'ticket_medio'].includes(metric)) return formatCurrency(value)
+  if (['ctr', 'taxa_conversao'].includes(metric)) return formatPercent(value)
+  if (metric === 'roas') return formatMultiplier(value)
+  return formatNumber(value)
 }

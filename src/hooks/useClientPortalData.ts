@@ -91,6 +91,8 @@ export interface SmartGoalRecord {
   current_value: number | null
   period: string | null
   status: string
+  /** Fase 55 — só em meta "Outro": count | percent | currency. */
+  unit: string | null
 }
 
 export interface AlertRecord {

@@ -36,11 +36,11 @@ export default function SmartGoals() {
   const filteredGoals = (goals ?? []).filter(
     (goal) => clientFilter === ALL_CLIENTS || goal.client_id === clientFilter,
   )
-  // Fase 54 — metas do funil: uma lista por cliente; as demais, um card cada.
-  const funnelByClient = new Map<string, typeof filteredGoals>()
-  for (const goal of filteredGoals.filter((g) => g.funnel)) {
-    funnelByClient.set(goal.client_id, [...(funnelByClient.get(goal.client_id) ?? []), goal])
-  }
+  // Fase 54 — metas do funil: uma lista só, e só com um cliente escolhido
+  // (em "Todos os clientes" a tela ficava poluída com o funil de cada um).
+  // As demais metas, um card cada.
+  const funnelGoals = clientFilter === ALL_CLIENTS ? [] : filteredGoals.filter((g) => g.funnel)
+  const hasAnyFunnel = (goals ?? []).some((g) => g.funnel)
   const cardGoals = filteredGoals.filter((goal) => !goal.funnel)
 
   return (
@@ -96,14 +96,17 @@ export default function SmartGoals() {
         </div>
       </div>
 
-      {Array.from(funnelByClient.entries()).map(([clientId, clientGoals]) => (
-        <FunnelGoalsList
-          key={clientId}
-          clientName={clientGoals[0].client?.name ?? 'Cliente'}
-          goals={clientGoals}
-          deleteMode={deleteMode}
-        />
-      ))}
+      {clientFilter === ALL_CLIENTS
+        ? hasAnyFunnel && (
+            <p className="text-sm text-muted-foreground">Selecione um cliente para ver o funil dele.</p>
+          )
+        : funnelGoals.length > 0 && (
+            <FunnelGoalsList
+              clientName={funnelGoals[0].client?.name ?? 'Cliente'}
+              goals={funnelGoals}
+              deleteMode={deleteMode}
+            />
+          )}
 
       {filteredGoals.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada ainda.</p>}
 

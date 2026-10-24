@@ -46,6 +46,7 @@ function makeGoal(overrides: Partial<ManagerSmartGoalRecord> = {}): ManagerSmart
     target_date: null,
     status: 'on_track',
     funnel: false,
+    unit: null,
     client: null,
     ...overrides,
   }

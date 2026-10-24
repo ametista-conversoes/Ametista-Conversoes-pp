@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAllClients, useCreateSmartGoal } from '@/hooks/useManagerPortalData'
 import { getTodayIsoDate } from '@/lib/format'
-import { isAutoGoalMetric, isLowerBetterMetric } from '@/lib/goal-progress'
+import { goalUnitLabels, isAutoGoalMetric, isLowerBetterMetric } from '@/lib/goal-progress'
 import { smartGoalMetricLabels, smartGoalStatusLabels } from '@/lib/status-styles'
 
 const METRIC_OTHER = 'other'
@@ -30,6 +30,7 @@ const newGoalSchema = z
     clientId: z.string().min(1, 'Escolha um cliente'),
     metricType: z.string().optional(),
     metricTypeOther: z.string().optional(),
+    unit: z.enum(['count', 'percent', 'currency']),
     targetValue: z
       .string()
       .min(1, 'Digite o valor alvo')
@@ -68,6 +69,7 @@ export function NewSmartGoalDialog() {
       clientId: '',
       metricType: '',
       metricTypeOther: '',
+      unit: 'count',
       targetValue: '',
       currentValue: '',
       targetDate: '',
@@ -93,6 +95,7 @@ export function NewSmartGoalDialog() {
         title: values.title,
         client_id: values.clientId,
         metric_type: metricType,
+        unit: values.metricType === METRIC_OTHER ? values.unit : null,
         target_value: Number(values.targetValue),
         current_value: !isAutoGoalMetric(metricType) && values.currentValue?.trim() ? Number(values.currentValue) : 0,
         target_date: values.targetDate?.trim() ? values.targetDate : null,
@@ -194,6 +197,33 @@ export function NewSmartGoalDialog() {
                     <FormControl>
                       <Input placeholder="Digite o nome da métrica" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {selectedMetric === METRIC_OTHER && (
+              <FormField
+                control={form.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de valor</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.entries(goalUnitLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
