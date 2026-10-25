@@ -8,6 +8,7 @@ import {
   MousePointerClick,
   Percent,
   Receipt,
+  ShoppingBag,
   Target,
   TrendingUp,
   Wallet,
@@ -17,10 +18,11 @@ import { MetricDetailDialog } from '@/components/dashboard/MetricDetailDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ManagerClientRecord } from '@/hooks/useManagerPortalData'
 import { useClientHealthScoreHistory, useClientPerformanceSnapshots } from '@/hooks/useManagerPortalData'
-import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from '@/lib/format'
+import { monthStartIso, salesForMonth, useClientMonthlySales } from '@/hooks/useMonthlySales'
+import { formatCurrency, formatMultiplier, formatNumber, formatPercent, getTodayIsoDate } from '@/lib/format'
 import { kpiDescriptions } from '@/lib/kpi-descriptions'
 import { buildHealthScoreSeries } from '@/lib/manager-metrics'
-import { aggregateSnapshotKpis, buildMetricSeries, computeRevenueFromLeads, computeRoas, type MetricKey } from '@/lib/metrics'
+import { aggregateSnapshotKpis, buildMetricSeries, computeMonthFinancials, type MetricKey } from '@/lib/metrics'
 
 interface MetricDetailConfig {
   label: string
@@ -49,12 +51,22 @@ export function ClientPerformanceMetricsCard({ client }: ClientPerformanceMetric
 
   const snapshotList = snapshots ?? []
   const kpis = aggregateSnapshotKpis(snapshotList)
-  const revenue = computeRevenueFromLeads(kpis.conversions, client.leads_to_close, client.average_ticket)
-  const roas = revenue != null ? computeRoas(revenue, kpis.spend) : null
+  // Fase 58 — Receita/ROAS/Lucro do MÊS CORRENTE, a partir das vendas
+  // informadas pelo cliente (o resto do card segue nos últimos 30 dias).
+  const { data: monthlySales } = useClientMonthlySales(client.id)
+  const [year, month] = getTodayIsoDate().split('-').map(Number)
+  const monthSales = salesForMonth(monthlySales, monthStartIso())
+  const { spend: monthSpend, revenue, roas } = computeMonthFinancials(
+    snapshotList,
+    year,
+    month,
+    monthSales,
+    client.average_ticket,
+  )
   // Mesma fórmula do FinancialSummaryCard/Histórico Mensal — Lucro
   // desconta a mensalidade da agência, não só o investimento em mídia.
   const totalCost = kpis.spend + (client.monthly_fee ?? 0)
-  const profit = revenue != null ? revenue - totalCost : null
+  const profit = revenue != null ? revenue - (monthSpend + (client.monthly_fee ?? 0)) : null
 
   const metricConfigs: Record<MetricKey, MetricDetailConfig> = {
     spend: { label: 'Investimento', currentValue: kpis.spend, formatValue: formatCurrency },
@@ -79,7 +91,7 @@ export function ClientPerformanceMetricsCard({ client }: ClientPerformanceMetric
     selectedMetric === 'healthScore'
       ? buildHealthScoreSeries(healthHistory ?? [])
       : selectedMetric
-        ? buildMetricSeries(snapshotList, selectedMetric, client.leads_to_close, client.average_ticket)
+        ? buildMetricSeries(snapshotList, selectedMetric)
         : []
 
   return (
@@ -110,20 +122,19 @@ export function ClientPerformanceMetricsCard({ client }: ClientPerformanceMetric
                 description={kpiDescriptions.gastoTotal}
               />
               <KpiCard
-                label="Receita"
+                label="Vendas (mês)"
+                value={monthSales != null ? formatNumber(monthSales) : '—'}
+                icon={ShoppingBag}
+                description="Vendas do mês corrente informadas pelo cliente no Portal do Cliente. Enquanto ele não informar, Receita, Lucro e ROAS ficam em branco."
+              />
+              <KpiCard
+                label="Receita (mês)"
                 value={formatCurrency(revenue)}
                 icon={TrendingUp}
                 description={kpiDescriptions.receita}
-                onClick={() => setSelectedMetric('revenue')}
               />
-              <KpiCard label="Lucro" value={formatCurrency(profit)} icon={Wallet} description={kpiDescriptions.lucro} />
-              <KpiCard
-                label="ROAS"
-                value={formatMultiplier(roas)}
-                icon={Gauge}
-                description={kpiDescriptions.roas}
-                onClick={() => setSelectedMetric('roas')}
-              />
+              <KpiCard label="Lucro (mês)" value={formatCurrency(profit)} icon={Wallet} description={kpiDescriptions.lucro} />
+              <KpiCard label="ROAS (mês)" value={formatMultiplier(roas)} icon={Gauge} description={kpiDescriptions.roas} />
               <KpiCard
                 label="CPA"
                 value={formatCurrency(kpis.cpa)}

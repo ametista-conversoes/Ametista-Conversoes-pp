@@ -600,6 +600,14 @@ async function seedClinicaSorriso(supabase: SupabaseClient, clientId: string, to
   // ---- Fecha os 2 meses passados no Histórico Mensal (mesma função
   // real do cron — o mês corrente fica "parcial" automaticamente) — só
   // depois dos leads existirem, já que a função conta form_responses. ----
+  // Fase 58 — "Vendas do mês" que a cliente informaria no Portal (≈12% dos
+  // leads de cada mês, mesma taxa dos status "venda" acima): sem isso o
+  // faturamento/ROAS do app fica em branco. Antes dos relatórios mensais.
+  await insertInChunks(supabase, 'client_monthly_sales', [
+    { client_id: clientId, month: r1.start, sales: Math.max(1, Math.round(leadsM1 * 0.12)) },
+    { client_id: clientId, month: r2.start, sales: Math.max(1, Math.round(leadsM2 * 0.12)) },
+    { client_id: clientId, month: r3.start, sales: Math.max(1, Math.round(leadsM3 * 0.12)) },
+  ])
   await supabase.rpc('generate_monthly_client_reports', { p_ref_month: r1.start })
   await supabase.rpc('generate_monthly_client_reports', { p_ref_month: r2.start })
 
@@ -1008,6 +1016,15 @@ async function seedLojaAurora(supabase: SupabaseClient, clientId: string, todayI
       .filter((d) => d.spend > 0)
       .map((d) => ({ client_id: clientId, project_id: project.id, snapshot_date: d.date, channel: 'meta_ads', spend: d.spend, clicks: d.clicks, impressions: d.impressions, conversions: d.conversions })),
   )
+  // Fase 58 — "Vendas do mês" informadas: e-commerce (1 conversão = 1
+  // venda), então as vendas de cada mês são as conversões do mês. Antes
+  // dos relatórios mensais (senão faturamento/ROAS ficam em branco).
+  const monthConversions = (days: { conversions: number }[]) => days.reduce((sum, d) => sum + d.conversions, 0)
+  await insertInChunks(supabase, 'client_monthly_sales', [
+    { client_id: clientId, month: r1.start, sales: monthConversions(clientM1) },
+    { client_id: clientId, month: r2.start, sales: monthConversions(clientM2) },
+    { client_id: clientId, month: r3.start, sales: monthConversions(clientM3) },
+  ])
   await supabase.rpc('generate_monthly_client_reports', { p_ref_month: r1.start })
   await supabase.rpc('generate_monthly_client_reports', { p_ref_month: r2.start })
 
@@ -1343,6 +1360,11 @@ async function handleRecreate(req: Request) {
   const today = new Date().toISOString().slice(0, 10)
   await seedClinicaSorriso(supabase, clinicaSorrisoId, today)
   if (lojaAuroraId) await seedLojaAurora(supabase, lojaAuroraId, today)
+
+  // Fase 58 — as metas são criadas no seed DEPOIS das vendas do mês; recalcula
+  // agora (mesma função do pg_cron) pra demo já sair com o progresso real.
+  const { error: refreshError } = await supabase.rpc('refresh_smart_goals_from_ads')
+  if (refreshError) return dbErrorResponse('handleRecreate: recalcular metas', refreshError)
 
   // Fase 50.E — login do Portal do Cliente pros 2 clientes demo (senha
   // fixa documentada fora do git, ver docs/interno/credenciais-demo.local.md).

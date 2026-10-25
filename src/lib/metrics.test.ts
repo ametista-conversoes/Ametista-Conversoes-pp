@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateSnapshotKpis, computeRevenueFromLeads, computeRoas } from '@/lib/metrics'
+import {
+  aggregateSnapshotKpis,
+  computeMonthFinancials,
+  computeRevenueFromLeads,
+  computeRevenueFromSales,
+  computeRoas,
+} from '@/lib/metrics'
 import type { PerformanceSnapshotRecord } from '@/hooks/useClientPortalData'
 
 function makeSnapshot(overrides: Partial<PerformanceSnapshotRecord> = {}): PerformanceSnapshotRecord {
@@ -103,5 +109,22 @@ describe('computeRoas', () => {
 
   it('sem investimento, ROAS fica null (evita divisão por zero)', () => {
     expect(computeRoas(3000, 0)).toBeNull()
+  })
+})
+
+describe('Fase 58 — vendas informadas', () => {
+  it('computeRevenueFromSales: vendas × ticket; sem vendas ou ticket = null', () => {
+    expect(computeRevenueFromSales(12, 500)).toBe(6000)
+    expect(computeRevenueFromSales(0, 500)).toBe(0)
+    expect(computeRevenueFromSales(null, 500)).toBeNull()
+    expect(computeRevenueFromSales(12, null)).toBeNull()
+  })
+
+  it('computeMonthFinancials: só o investimento do mês pedido entra no ROAS', () => {
+    const snap = (snapshot_date: string, spend: number) =>
+      ({ snapshot_date, spend, clicks: 0, impressions: 0, conversions: 0 }) as unknown as Parameters<typeof computeMonthFinancials>[0][number]
+    const snapshots = [snap('2026-09-30', 999), snap('2026-10-01', 1000), snap('2026-10-15', 1000)]
+    expect(computeMonthFinancials(snapshots, 2026, 10, 10, 800)).toEqual({ spend: 2000, revenue: 8000, roas: 4 })
+    expect(computeMonthFinancials(snapshots, 2026, 10, null, 800)).toEqual({ spend: 2000, revenue: null, roas: null })
   })
 })

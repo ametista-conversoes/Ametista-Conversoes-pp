@@ -36,7 +36,8 @@ import {
   resolveAnalysisPeriod,
 } from '@/lib/manager-analysis'
 import { computeMediaBudgetModifier, projectMonthSpend } from '@/lib/media-budget-modifier'
-import { aggregateSnapshotKpisForRange, computeRevenueFromLeads, computeRoas } from '@/lib/metrics'
+import { monthStartIso, salesForMonth, useClientMonthlySales } from '@/hooks/useMonthlySales'
+import { aggregateSnapshotKpisForRange, computeMonthFinancials } from '@/lib/metrics'
 import { pctChangeLabel } from '@/lib/pdf-report'
 import { planLimitsFor } from '@/lib/plan-limits'
 import { milestone90dStatusLabels } from '@/lib/status-styles'
@@ -141,6 +142,7 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
   const previousPeriod = previousAnalysisPeriod(plan, tipo, period.periodStart)
 
   const { data: snapshots } = useClientPerformanceSnapshots(client.id)
+  const { data: monthlySales } = useClientMonthlySales(client.id)
   const { data: leadCounts } = useClientLeadStatusCountsForMonth(client.id, period.periodStart, period.periodEnd)
   const { data: prevLeadCounts } = useClientLeadStatusCountsForMonth(client.id, previousPeriod.periodStart, previousPeriod.periodEnd)
   const { data: usage } = useOptimizationUsageForPeriod(client.id, period.periodStart, period.periodEnd)
@@ -159,12 +161,23 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
   const numbers = useMemo(() => {
     const kpis = aggregateSnapshotKpisForRange(snapshots ?? [], period.periodStart, period.periodEnd)
     const prevKpis = aggregateSnapshotKpisForRange(snapshots ?? [], previousPeriod.periodStart, previousPeriod.periodEnd)
-    const revenue = computeRevenueFromLeads(kpis.conversions, client.leads_to_close, client.average_ticket)
-    const prevRevenue = computeRevenueFromLeads(prevKpis.conversions, client.leads_to_close, client.average_ticket)
-    const roas = revenue != null ? computeRoas(revenue, kpis.spend) : null
-    const prevRoas = prevRevenue != null ? computeRoas(prevRevenue, prevKpis.spend) : null
-    return { kpis, prevKpis, revenue, prevRevenue, roas, prevRoas }
-  }, [snapshots, period.periodStart, period.periodEnd, previousPeriod.periodStart, previousPeriod.periodEnd, client.leads_to_close, client.average_ticket])
+    // Fase 58 — vendas são informadas por MÊS: Receita/ROAS são os do mês do
+    // período (rótulo "(mês)"), inclusive em análise semanal/quinzenal.
+    const monthOf = (iso: string) => {
+      const [y, m] = iso.split('-').map(Number)
+      return computeMonthFinancials(snapshots ?? [], y, m, salesForMonth(monthlySales, monthStartIso(y, m)), client.average_ticket)
+    }
+    const current = monthOf(period.periodStart)
+    const previous = monthOf(previousPeriod.periodStart)
+    return {
+      kpis,
+      prevKpis,
+      revenue: current.revenue,
+      prevRevenue: previous.revenue,
+      roas: current.roas,
+      prevRoas: previous.roas,
+    }
+  }, [snapshots, monthlySales, period.periodStart, period.periodEnd, previousPeriod.periodStart, previousPeriod.periodEnd, client.average_ticket])
 
   const overdueTasks = clientTasks.filter((t) => t.status !== 'done' && t.due_date && t.due_date < new Date().toISOString().slice(0, 10))
 
@@ -375,8 +388,8 @@ export function ManagerAnalysisFormDialog({ trigger, client, analysis, clientGoa
         <div className="rounded-lg bg-secondary/50 p-3">
           <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground/70">Números do período (automático)</p>
           {numberRow('Investimento', formatCurrency(numbers.kpis.spend), pctChangeLabel(numbers.kpis.spend, numbers.prevKpis.spend))}
-          {numberRow('Receita estimada', formatCurrency(numbers.revenue), pctChangeLabel(numbers.revenue, numbers.prevRevenue))}
-          {numberRow('ROAS', formatMultiplier(numbers.roas), pctChangeLabel(numbers.roas, numbers.prevRoas))}
+          {numberRow('Receita (mês)', formatCurrency(numbers.revenue), pctChangeLabel(numbers.revenue, numbers.prevRevenue))}
+          {numberRow('ROAS (mês)', formatMultiplier(numbers.roas), pctChangeLabel(numbers.roas, numbers.prevRoas))}
           {numberRow('CPA', formatCurrency(numbers.kpis.cpa), pctChangeLabel(numbers.kpis.cpa, numbers.prevKpis.cpa))}
           {numberRow('CTR', formatPercent(numbers.kpis.ctr))}
           {numberRow('Conversões', formatNumber(numbers.kpis.conversions), pctChangeLabel(numbers.kpis.conversions, numbers.prevKpis.conversions))}

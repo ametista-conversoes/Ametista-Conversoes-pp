@@ -1,9 +1,10 @@
 // Ametista Conversões — Fase 53: valor de uma métrica nas contas de anúncio
 // (últimos 30 dias) — usado na coluna "Real (30 dias)" do "Montar funil".
-// Mesmas fórmulas do card de Performance (`computeRateMetrics`/
-// `computeRevenueFromLeads`). O progresso automático das metas (mês
-// corrente) é calculado no banco — migration-102.
-import { computeRateMetrics, computeRevenueFromLeads, computeRoas } from './metrics'
+// Mesmas fórmulas do card de Performance (`computeRateMetrics`). Faturamento
+// e ROAS não entram (Fase 58: vêm das vendas do mês informadas pelo cliente,
+// não de estimativa). O progresso automático das metas (mês corrente) é
+// calculado no banco — migration-102/106.
+import { computeRateMetrics } from './metrics'
 
 export interface AdTotals {
   spend: number
@@ -23,7 +24,6 @@ const round2 = (value: number | null) => (value == null ? null : Math.round(valu
 export function adMetricValue(metricType: string | null, totals: AdTotals): number | null {
   const { spend, clicks, impressions, conversions } = totals
   const rates = computeRateMetrics(spend, clicks, impressions, conversions)
-  const revenue = computeRevenueFromLeads(conversions, totals.leadsToClose, totals.averageTicket)
   switch (metricType) {
     case 'leads':
     case 'conversoes':
@@ -42,10 +42,6 @@ export function adMetricValue(metricType: string | null, totals: AdTotals): numb
       return round2(impressions > 0 ? (spend / impressions) * 1000 : null)
     case 'taxa_conversao':
       return round2(rates.conversionRate)
-    case 'faturamento':
-      return round2(revenue)
-    case 'roas':
-      return round2(revenue == null ? null : computeRoas(revenue, spend))
     default:
       return null
   }

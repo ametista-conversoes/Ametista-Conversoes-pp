@@ -20,16 +20,15 @@ describe('adMetricValue', () => {
     expect(adMetricValue('ctr', totals)).toBe(2)
     expect(adMetricValue('cpm', totals)).toBe(50)
     expect(adMetricValue('taxa_conversao', totals)).toBe(6.25)
-    // 25 conversões ÷ 5 leads por venda × R$800 = R$4.000 → ROAS 4
-    expect(adMetricValue('faturamento', totals)).toBe(4000)
-    expect(adMetricValue('roas', totals)).toBe(4)
+    // Fase 58: faturamento/ROAS vêm das vendas informadas, não daqui.
+    expect(adMetricValue('faturamento', totals)).toBeNull()
+    expect(adMetricValue('roas', totals)).toBeNull()
   })
 
   it('devolve null quando não dá pra calcular', () => {
     const empty: AdTotals = { ...totals, clicks: 0, impressions: 0, conversions: 0 }
     expect(adMetricValue('cpa', empty)).toBeNull()
     expect(adMetricValue('ctr', empty)).toBeNull()
-    expect(adMetricValue('roas', { ...totals, leadsToClose: null })).toBeNull()
     expect(adMetricValue('ticket_medio', totals)).toBeNull()
   })
 })

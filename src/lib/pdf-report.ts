@@ -234,8 +234,8 @@ export function generateMonthlyReportPdf(
     { label: 'Investimento em mídia', value: formatCurrency(data.spend), current: data.spend, previous: prev?.spend },
     { label: 'Mensalidade da agência', value: formatCurrency(data.monthlyFee) },
     { label: 'Gasto total', value: formatCurrency(totalCost) },
-    { label: 'Receita estimada', value: formatCurrency(data.revenue), current: data.revenue, previous: prev?.revenue },
-    { label: 'Resultado estimado', value: formatCurrency(profit) },
+    { label: 'Receita', value: formatCurrency(data.revenue), current: data.revenue, previous: prev?.revenue },
+    { label: 'Resultado', value: formatCurrency(profit) },
     { label: 'ROAS', value: formatMultiplier(data.roas), current: data.roas, previous: prev?.roas },
     { label: 'CPA', value: formatCurrency(data.cpa), current: data.cpa, previous: prev?.cpa },
     { label: 'CPC', value: formatCurrency(data.cpc), current: data.cpc, previous: prev?.cpc },
@@ -289,11 +289,10 @@ export function generateMonthlyReportPdf(
   doc.setFontSize(8.5)
   doc.setTextColor(...COLOR_GRAY_TEXT)
   const footnoteLines = doc.splitTextToSize(
-    'Receita estimada é calculada a partir de Leads reais × Ticket Médio informado pelo cliente (ou direto por ' +
-      'Conversões × Ticket Médio, quando o projeto é do tipo "Vendas") — não é um valor de venda confirmado, exceto ' +
+    'Receita = vendas do mês informadas pelo cliente x Ticket Médio (em branco se as vendas do mês não foram ' +
       // "−" (sinal de menos tipográfico) também sai corrompido no PDF —
       // hífen normal em vez disso.
-      'quando o projeto rastreia valor de conversão real. Resultado estimado = Receita estimada - Gasto total.',
+      'informadas). Resultado = Receita - Gasto total.',
     CONTENT_WIDTH,
   )
   doc.text(footnoteLines, MARGIN_X, y)

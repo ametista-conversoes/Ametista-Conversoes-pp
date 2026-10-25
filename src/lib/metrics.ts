@@ -3,12 +3,11 @@ import type { ChannelBreakdown } from '@/components/charts/SpendRevenueBarChart'
 import type { TrendPoint } from '@/components/charts/PerformanceTrendChart'
 
 /**
- * Receita estimada a partir de Leads reais — nenhuma plataforma de
- * anúncio reporta faturamento, então a Receita é calculada em 2 passos
- * a partir de duas premissas de negócio editáveis por cliente (Central
- * de Informações do Cliente): Vendas = Leads ÷ leadsToClose, Receita =
- * Vendas × averageTicket. `null` sem `leadsToClose`/`averageTicket`
- * configurados (evita divisão por zero).
+ * Receita ESTIMADA a partir de Leads (Vendas = Leads ÷ leadsToClose,
+ * Receita = Vendas × averageTicket). Fase 58: o app não usa mais isso pra
+ * faturamento/ROAS reais (agora vêm das vendas informadas pelo cliente —
+ * `computeRevenueFromSales`); fica só pro PLANEJAMENTO do "Montar funil".
+ * `null` sem `leadsToClose`/`averageTicket` (evita divisão por zero).
  */
 export function computeRevenueFromLeads(
   leads: number,
@@ -20,10 +19,17 @@ export function computeRevenueFromLeads(
   return sales * averageTicket
 }
 
-/** ROAS cruza a Receita (calculada a partir de Leads) com o Investimento
- * real (snapshots). */
+/** ROAS cruza o faturamento com o Investimento real (snapshots). */
 export function computeRoas(revenue: number, spend: number): number | null {
   return spend > 0 ? revenue / spend : null
+}
+
+/** Fase 58 — faturamento real = vendas do mês informadas pelo cliente ×
+ * ticket médio da ficha. `null` sem vendas informadas ou sem ticket (o app
+ * mostra "—" e pede pro cliente informar). */
+export function computeRevenueFromSales(sales: number | null | undefined, averageTicket: number | null): number | null {
+  if (sales == null || averageTicket == null) return null
+  return sales * averageTicket
 }
 
 /** Agrupa investimento/receita dos projetos por canal, para o gráfico de barras. */
@@ -41,19 +47,16 @@ export function groupByChannel(projects: ProjectRecord[]): ChannelBreakdown[] {
 
 /**
  * Investimento real por canal (retratos diários) dentro de um mês
- * específico, com a Receita do mês inteiro (calculada a partir dos
- * Leads reais, mesma fórmula de `computeRevenueFromLeads`) distribuída
- * proporcionalmente pela fatia de conversões de cada canal — não tem
- * receita reportada por canal em nenhuma plataforma de anúncio, essa é
- * a mesma lógica de atribuição já usada pro total do cliente, só
- * quebrada por canal (Fase 21.3b, aba "Histórico Mensal").
+ * específico, com o faturamento do mês inteiro (Fase 58: vendas informadas
+ * × ticket — `computeRevenueFromSales`) distribuído proporcionalmente pela
+ * fatia de conversões de cada canal — as vendas são informadas pro cliente
+ * inteiro, não por canal (Fase 21.3b, aba "Histórico Mensal").
  */
 export function groupByChannelForMonth(
   snapshots: PerformanceSnapshotRecord[],
   year: number,
   month: number,
-  leadsToClose: number | null,
-  averageTicket: number | null,
+  monthRevenue: number | null,
 ): ChannelBreakdown[] {
   const prefix = `${year}-${String(month).padStart(2, '0')}`
   const monthSnapshots = snapshots.filter((s) => s.snapshot_date.startsWith(prefix))
@@ -69,7 +72,7 @@ export function groupByChannelForMonth(
     totalConversions += s.conversions ?? 0
   }
 
-  const totalRevenue = computeRevenueFromLeads(totalConversions, leadsToClose, averageTicket)
+  const totalRevenue = monthRevenue
 
   return Array.from(byChannel.entries()).map(([channel, { spend, conversions }]) => ({
     channel,
@@ -139,6 +142,21 @@ export function aggregateSnapshotKpisForMonth(snapshots: PerformanceSnapshotReco
   return sumSnapshotKpis(snapshots.filter((s) => s.snapshot_date.startsWith(prefix)))
 }
 
+/** Fase 58 — faturamento/ROAS de um mês: vendas informadas × ticket, ÷
+ * investimento daquele mês. Usado no card de Performance, Dashboard e
+ * Relatórios ("mês corrente") e na Análise do Gestor (mês do período). */
+export function computeMonthFinancials(
+  snapshots: PerformanceSnapshotRecord[],
+  year: number,
+  month: number,
+  sales: number | null,
+  averageTicket: number | null,
+): { spend: number; revenue: number | null; roas: number | null } {
+  const { spend } = aggregateSnapshotKpisForMonth(snapshots, year, month)
+  const revenue = computeRevenueFromSales(sales, averageTicket)
+  return { spend, revenue, roas: revenue != null ? computeRoas(revenue, spend) : null }
+}
+
 /** Fase 48.6 — mesmas fórmulas, mas pra um período arbitrário
  * (`periodStart`/`periodEnd` INCLUSIVOS) em vez de um mês calendário
  * inteiro — a Análise do Gestor usa quinzena (Escala) e semana
@@ -164,15 +182,11 @@ export interface MetricSeriesPoint {
  * Série diária de UMA métrica, pro gráfico de linha do
  * `MetricDetailDialog` — agrupa os retratos por data (mesmo padrão de
  * `buildTrendSeries`) e aplica, dia a dia, a MESMA fórmula já usada em
- * `aggregateSnapshotKpis`/`computeRevenueFromLeads`/`computeRoas`, pra
- * nunca destoar do que já é mostrado no resto do app.
+ * `aggregateSnapshotKpis`, pra nunca destoar do resto do app. Receita/ROAS
+ * não têm série diária (Fase 58: vêm das vendas informadas por MÊS).
  */
-export function buildMetricSeries(
-  snapshots: PerformanceSnapshotRecord[],
-  metricKey: MetricKey,
-  leadsToClose: number | null,
-  averageTicket: number | null,
-): MetricSeriesPoint[] {
+export function buildMetricSeries(snapshots: PerformanceSnapshotRecord[], metricKey: MetricKey): MetricSeriesPoint[] {
+  if (metricKey === 'revenue' || metricKey === 'roas') return []
   const byDate = new Map<string, { spend: number; clicks: number; impressions: number; conversions: number }>()
   for (const s of snapshots) {
     const existing = byDate.get(s.snapshot_date) ?? { spend: 0, clicks: 0, impressions: 0, conversions: 0 }
@@ -212,14 +226,8 @@ export function buildMetricSeries(
         case 'cpa':
           value = day.conversions > 0 ? day.spend / day.conversions : null
           break
-        case 'revenue':
-          value = computeRevenueFromLeads(day.conversions, leadsToClose, averageTicket)
-          break
-        case 'roas': {
-          const dayRevenue = computeRevenueFromLeads(day.conversions, leadsToClose, averageTicket)
-          value = dayRevenue != null ? computeRoas(dayRevenue, day.spend) : null
-          break
-        }
+        default:
+          value = null
       }
       return { date, value }
     })

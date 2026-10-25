@@ -8,6 +8,7 @@ import { HealthScoreGauge } from '@/components/dashboard/HealthScoreGauge'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { LatestManagerAnalysisCard } from '@/components/dashboard/LatestManagerAnalysisCard'
 import { MetricDetailDialog } from '@/components/dashboard/MetricDetailDialog'
+import { MonthlySalesCard } from '@/components/dashboard/MonthlySalesCard'
 import { NotificationsCard } from '@/components/dashboard/NotificationsCard'
 import { UpcomingMeetingsCard } from '@/components/dashboard/UpcomingMeetingsCard'
 import { UnlinkedClientNotice } from '@/components/shared/UnlinkedClientNotice'
@@ -21,9 +22,10 @@ import {
   useTasks,
   useUpcomingMeetings,
 } from '@/hooks/useClientPortalData'
-import { formatCurrency, formatMultiplier, formatNumber } from '@/lib/format'
+import { monthStartIso, salesForMonth, useClientMonthlySales } from '@/hooks/useMonthlySales'
+import { formatCurrency, formatMultiplier, formatNumber, getTodayIsoDate } from '@/lib/format'
 import { kpiDescriptions } from '@/lib/kpi-descriptions'
-import { aggregateSnapshotKpis, buildMetricSeries, computeRevenueFromLeads, computeRoas, type MetricKey } from '@/lib/metrics'
+import { aggregateSnapshotKpis, buildMetricSeries, computeMonthFinancials, type MetricKey } from '@/lib/metrics'
 
 interface MetricDetailConfig {
   label: string
@@ -40,6 +42,7 @@ export default function Dashboard() {
   const { data: goals } = useSmartGoals()
   const { data: alerts } = useAlerts()
   const { data: managerAnalyses } = usePublishedManagerAnalysesForClient()
+  const { data: monthlySales } = useClientMonthlySales(clientId)
   const [selectedMetric, setSelectedMetric] = useState<MetricKey | null>(null)
 
   if (!clientId) {
@@ -56,8 +59,16 @@ export default function Dashboard() {
 
   const snapshotList = snapshots ?? []
   const kpis = aggregateSnapshotKpis(snapshotList)
-  const revenue = computeRevenueFromLeads(kpis.conversions, client?.leads_to_close ?? null, client?.average_ticket ?? null)
-  const roas = revenue != null ? computeRoas(revenue, kpis.spend) : null
+  // Fase 58 — Receita/ROAS do mês corrente, das vendas que o cliente informa.
+  const [year, month] = getTodayIsoDate().split('-').map(Number)
+  const monthSales = salesForMonth(monthlySales, monthStartIso())
+  const { spend: monthSpend, revenue, roas } = computeMonthFinancials(
+    snapshotList,
+    year,
+    month,
+    monthSales,
+    client?.average_ticket ?? null,
+  )
 
   const metricConfigs: Partial<Record<MetricKey, MetricDetailConfig>> = {
     spend: { label: 'Investimento', currentValue: kpis.spend, formatValue: formatCurrency },
@@ -87,20 +98,8 @@ export default function Dashboard() {
             description={kpiDescriptions.investimento}
             onClick={() => setSelectedMetric('spend')}
           />
-          <KpiCard
-            label="Receita"
-            value={formatCurrency(revenue)}
-            icon={TrendingUp}
-            description={kpiDescriptions.receita}
-            onClick={() => setSelectedMetric('revenue')}
-          />
-          <KpiCard
-            label="ROAS"
-            value={formatMultiplier(roas)}
-            icon={Gauge}
-            description={kpiDescriptions.roas}
-            onClick={() => setSelectedMetric('roas')}
-          />
+          <KpiCard label="Receita (mês)" value={formatCurrency(revenue)} icon={TrendingUp} description={kpiDescriptions.receita} />
+          <KpiCard label="ROAS (mês)" value={formatMultiplier(roas)} icon={Gauge} description={kpiDescriptions.roas} />
           <KpiCard
             label="CPA"
             value={formatCurrency(kpis.cpa)}
@@ -131,7 +130,8 @@ export default function Dashboard() {
           />
           <UpcomingMeetingsCard meetings={meetings ?? []} />
           <AssignedTasksCard tasks={tasks ?? []} />
-          <FinancialSummaryCard monthlyFee={client?.monthly_fee ?? null} spend={kpis.spend} revenue={revenue} />
+          {clientId && <MonthlySalesCard clientId={clientId} />}
+          <FinancialSummaryCard monthlyFee={client?.monthly_fee ?? null} spend={monthSpend} revenue={revenue} />
           <GoalsProgressCard goals={goals ?? []} />
           <LatestManagerAnalysisCard analyses={managerAnalyses ?? []} />
           <NotificationsCard alerts={alerts ?? []} />
@@ -144,7 +144,7 @@ export default function Dashboard() {
           onOpenChange={(open) => !open && setSelectedMetric(null)}
           label={selectedMetricConfig.label}
           currentValue={selectedMetricConfig.currentValue}
-          series={buildMetricSeries(snapshotList, selectedMetric, client?.leads_to_close ?? null, client?.average_ticket ?? null)}
+          series={buildMetricSeries(snapshotList, selectedMetric)}
           formatValue={selectedMetricConfig.formatValue}
         />
       )}

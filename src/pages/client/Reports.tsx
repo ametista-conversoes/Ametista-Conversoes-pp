@@ -46,14 +46,16 @@ import {
   aggregateSnapshotKpisForMonth,
   buildMetricSeries,
   buildTrendSeries,
+  computeMonthFinancials,
   computeRateMetrics,
-  computeRevenueFromLeads,
+  computeRevenueFromSales,
   computeRoas,
   groupByChannel,
   groupByChannelForMonth,
   type MetricKey,
 } from '@/lib/metrics'
 import { generateMonthlyReportPdf, type MonthlyReportPdfData } from '@/lib/pdf-report'
+import { monthStartIso, salesForMonth, useClientMonthlySales } from '@/hooks/useMonthlySales'
 
 function lastDayOfMonthIso(year: number, month: number): string {
   const d = new Date(year, month, 0)
@@ -76,6 +78,7 @@ export default function Reports() {
   const { data: goals, isLoading: loadingGoals, isError: goalsIsError } = useSmartGoals()
   const { data: milestones90d } = useClient90DayMilestonesForClient()
   const { data: managerAnalyses } = usePublishedManagerAnalysesForClient()
+  const { data: monthlySales } = useClientMonthlySales(clientId)
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   // "all" = histórico inteiro (abas Tráfego/Financeiro), "month" = só o
@@ -105,8 +108,15 @@ export default function Reports() {
   const projectList = projects ?? []
   const snapshotList = snapshots ?? []
   const kpis = aggregateSnapshotKpis(snapshotList)
-  const revenue = computeRevenueFromLeads(kpis.conversions, client?.leads_to_close ?? null, client?.average_ticket ?? null)
-  const roas = revenue != null ? computeRoas(revenue, kpis.spend) : null
+  // Fase 58 — Receita/ROAS das abas Tráfego/Financeiro: mês corrente, a
+  // partir das vendas informadas pelo cliente (resto segue nos 30 dias).
+  const { revenue, roas } = computeMonthFinancials(
+    snapshotList,
+    now.getFullYear(),
+    now.getMonth() + 1,
+    salesForMonth(monthlySales, monthStartIso()),
+    client?.average_ticket ?? null,
+  )
   const channelData = groupByChannel(projectList)
   const trendData = buildTrendSeries(snapshotList)
 
@@ -151,7 +161,8 @@ export default function Reports() {
     }
   } else if (isCurrentMonth) {
     const liveKpis = aggregateSnapshotKpisForMonth(snapshotList, selectedYear, selectedMonth)
-    const liveRevenue = computeRevenueFromLeads(liveKpis.conversions, client?.leads_to_close ?? null, client?.average_ticket ?? null)
+    const liveSales = salesForMonth(monthlySales, monthStartIso(selectedYear, selectedMonth))
+    const liveRevenue = computeRevenueFromSales(liveSales, client?.average_ticket ?? null)
     const liveLeads = liveLeadCounts?.leads ?? null
     monthlyData = {
       spend: liveKpis.spend,
@@ -204,13 +215,7 @@ export default function Reports() {
   // desconta a mensalidade da agência, não só o investimento em mídia.
   const monthlyTotalCost = (monthlyData?.spend ?? 0) + (monthlyData?.monthlyFee ?? 0)
   const monthlyProfit = monthlyData?.revenue != null ? monthlyData.revenue - monthlyTotalCost : null
-  const monthChannelData = groupByChannelForMonth(
-    snapshotList,
-    selectedYear,
-    selectedMonth,
-    client?.leads_to_close ?? null,
-    client?.average_ticket ?? null,
-  )
+  const monthChannelData = groupByChannelForMonth(snapshotList, selectedYear, selectedMonth, monthlyData?.revenue ?? null)
   const monthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`
   const monthSnapshots = snapshotList.filter((s) => s.snapshot_date.startsWith(monthPrefix))
   const monthTrendData = buildTrendSeries(monthSnapshots)
@@ -221,15 +226,13 @@ export default function Reports() {
     : lastDayOfMonthIso(selectedYear, selectedMonth)
 
   // Config dos cards clicáveis da aba "Histórico Mensal" — "Gasto
-  // Total" e "Resultado estimado" ficam de fora (dependem da
+  // Total" e "Resultado" ficam de fora (dependem da
   // mensalidade, um valor só do mês inteiro, sem jeito natural de virar
   // uma série diária); Leads/Custo por lead/Vendas/Taxa lead→venda
   // também ficam de fora (sem série diária calculada, ver metrics.ts).
   const monthlyMetricConfigs: Partial<Record<MetricKey, MetricDetailConfig>> = monthlyData
     ? {
         spend: { label: 'Investimento', currentValue: monthlyData.spend, formatValue: formatCurrency },
-        revenue: { label: 'Receita estimada', currentValue: monthlyData.revenue, formatValue: formatCurrency },
-        roas: { label: 'ROAS', currentValue: monthlyData.roas, formatValue: formatMultiplier },
         cpa: { label: 'CPA', currentValue: monthlyData.cpa, formatValue: formatCurrency },
         cpc: { label: 'CPC', currentValue: monthlyData.cpc, formatValue: formatCurrency },
         ctr: { label: 'CTR médio', currentValue: monthlyData.ctr, formatValue: formatPercent },
@@ -243,12 +246,7 @@ export default function Reports() {
       : metricConfigs[selectedMetric.key]
     : undefined
   const selectedMetricSeries = selectedMetric
-    ? buildMetricSeries(
-        selectedMetric.scope === 'month' ? monthSnapshots : snapshotList,
-        selectedMetric.key,
-        client?.leads_to_close ?? null,
-        client?.average_ticket ?? null,
-      )
+    ? buildMetricSeries(selectedMetric.scope === 'month' ? monthSnapshots : snapshotList, selectedMetric.key)
     : []
 
   return (
@@ -279,11 +277,10 @@ export default function Reports() {
                 onClick={() => setSelectedMetric({ key: 'ctr', scope: 'all' })}
               />
               <KpiCard
-                label="ROAS"
+                label="ROAS (mês)"
                 value={formatMultiplier(roas)}
                 icon={Gauge}
                 description={kpiDescriptions.roas}
-                onClick={() => setSelectedMetric({ key: 'roas', scope: 'all' })}
               />
               <KpiCard
                 label="Impressões"
@@ -340,11 +337,10 @@ export default function Reports() {
                 onClick={() => setSelectedMetric({ key: 'spend', scope: 'all' })}
               />
               <KpiCard
-                label="Receita"
+                label="Receita (mês)"
                 value={formatCurrency(revenue)}
                 icon={TrendingUp}
                 description={kpiDescriptions.receita}
-                onClick={() => setSelectedMetric({ key: 'revenue', scope: 'all' })}
               />
               <KpiCard
                 label="CPA"
@@ -456,14 +452,13 @@ export default function Reports() {
                     description={kpiDescriptions.gastoTotal}
                   />
                   <KpiCard
-                    label="Receita estimada"
+                    label="Receita"
                     value={formatCurrency(monthlyData.revenue)}
                     icon={TrendingUp}
                     description={kpiDescriptions.receita}
-                    onClick={() => setSelectedMetric({ key: 'revenue', scope: 'month' })}
                   />
                   <KpiCard
-                    label="Resultado estimado"
+                    label="Resultado"
                     value={formatCurrency(monthlyProfit)}
                     icon={Wallet}
                     description={kpiDescriptions.lucro}
@@ -473,7 +468,6 @@ export default function Reports() {
                     value={formatMultiplier(monthlyData.roas)}
                     icon={Gauge}
                     description={kpiDescriptions.roas}
-                    onClick={() => setSelectedMetric({ key: 'roas', scope: 'month' })}
                   />
                   <KpiCard
                     label="CPA"
@@ -529,9 +523,8 @@ export default function Reports() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground/70">
-                Receita estimada e Resultado estimado vêm de Leads reais × Ticket Médio informado pelo cliente (ou direto de
-                Conversões × Ticket Médio, quando o projeto é do tipo "Vendas") — não são valor de venda confirmado, a menos
-                que o projeto rastreie valor de conversão real.
+                Receita = vendas do mês que você informa no Dashboard (card "Vendas do mês") × Ticket Médio. Enquanto as
+                vendas do mês não forem informadas, Receita, Resultado e ROAS ficam em branco.
               </p>
 
               <Card className="min-w-0 overflow-hidden rounded-xl border border-[#1A2540] bg-[#131C31] p-5 hover:border-purple-600/30 md:p-6">

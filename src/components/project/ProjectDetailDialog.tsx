@@ -20,7 +20,6 @@ import {
   useCampaignPerformance,
   useDigitalAssetConnections,
   useDismissCampaignProblem,
-  useManagerClient,
   useProblemCampaignLinks,
   useProjectCampaignLinks,
   useUpdateProject,
@@ -161,29 +160,12 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
   )
   const effectiveSpend = hasLinkedCampaigns ? (campaignPerformance.data?.spend ?? null) : (project?.spend ?? null)
 
-  // Receita automática (só quando vinculado a pelo menos 1 campanha
-  // real e o cliente tem Ticket Médio configurado): "Vendas" pula a
-  // divisão por leads_to_close porque cada conversão já é uma venda;
-  // "Leads" segue a mesma fórmula de computeRevenueFromLeads
-  // (src/lib/metrics.ts), só que aplicada aqui por projeto em vez de
-  // conta inteira, somando as conversões de TODAS as campanhas
-  // vinculadas. Só entra em ação enquanto `project.revenue` nunca foi
-  // digitado manualmente (fica null até o gestor editar pela primeira
-  // vez) — depois disso o valor manual sempre vence, mesmo que volte a
-  // ficar igual ao automático por coincidência.
-  const client = useManagerClient(project?.client_id ?? null)
+  // Fase 58 — sem receita automática por projeto: as vendas são
+  // informadas por MÊS pro cliente inteiro (não dá pra separar por
+  // projeto), então Receita/ROAS do cliente ficam na Central de
+  // Informações. Aqui só vale o valor digitado manualmente no projeto.
+  const effectiveRevenue = project?.revenue ?? null
   const conversionType = project?.conversion_type ?? 'leads'
-  const linkedConversions = hasLinkedCampaigns ? (campaignPerformance.data?.conversions ?? null) : null
-  const averageTicket = client.data?.average_ticket ?? null
-  const leadsToClose = client.data?.leads_to_close ?? null
-  const autoRevenue = (() => {
-    if (linkedConversions == null || averageTicket == null) return null
-    if (conversionType === 'vendas') return linkedConversions * averageTicket
-    if (leadsToClose == null || leadsToClose <= 0) return null
-    return (linkedConversions / leadsToClose) * averageTicket
-  })()
-  const usingAutoRevenue = project?.revenue == null && autoRevenue != null
-  const effectiveRevenue = usingAutoRevenue ? autoRevenue : (project?.revenue ?? null)
 
   const digitalAssetConnections = useDigitalAssetConnections()
   const problemCampaignLinksQuery = useProblemCampaignLinks()
@@ -265,9 +247,8 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
                   <p className="text-xs text-muted-foreground">
                     CPA, CTR e gasto abaixo vêm d{campaignLinks.length > 1 ? 'as campanhas vinculadas' : 'a campanha vinculada'} (
                     {campaignLinks.map((l) => l.external_campaign_name ?? l.external_campaign_id).join(', ')}), últimos 30 dias.{' '}
-                    {usingAutoRevenue
-                      ? 'Receita calculada automaticamente a partir das conversões e do Ticket Médio do cliente.'
-                      : 'Os provedores de anúncio não reportam faturamento — configure o Ticket Médio do cliente pra calcular a Receita automaticamente, ou digite manualmente.'}
+                    Vendas são informadas por mês para o cliente inteiro — veja Receita e ROAS na Central de Informações (ou
+                    digite a Receita deste projeto manualmente).
                   </p>
                 )}
 
@@ -280,7 +261,9 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">ROAS</p>
-                    <p className="text-foreground">{formatMultiplier(computeRoas(effectiveRevenue ?? 0, effectiveSpend ?? 0))}</p>
+                    <p className="text-foreground">
+                      {formatMultiplier(effectiveRevenue != null ? computeRoas(effectiveRevenue, effectiveSpend ?? 0) : null)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">CTR</p>
@@ -337,20 +320,6 @@ export function ProjectDetailDialog({ project, tasks, onOpenChange }: ProjectDet
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
-                      </div>
-                    ) : usingAutoRevenue ? (
-                      <div>
-                        <p className="text-foreground">{formatCurrency(autoRevenue)}</p>
-                        <button
-                          type="button"
-                          className="text-[11px] text-muted-foreground underline hover:text-purple-400"
-                          onClick={() => {
-                            setRevenueDraft(autoRevenue != null ? String(autoRevenue) : '')
-                            setEditingRevenue(true)
-                          }}
-                        >
-                          calculado automaticamente ({conversionTypeLabels[conversionType].toLowerCase()}) — editar manualmente
-                        </button>
                       </div>
                     ) : (
                       <button

@@ -9,9 +9,9 @@ export const kpiDescriptions = {
     'Cálculo: soma do gasto sincronizado dos últimos 30 dias. Sem integração conectada, aparece "—".',
 
   receita:
-    'Receita estimada = Faturamento estimado a partir dos Leads reais\n\n' +
-    'Nenhuma plataforma de anúncio reporta faturamento, então a Receita é calculada em 2 passos: Vendas = Leads ÷ "Leads p/ fechar 1 venda", depois Receita = Vendas × "Ticket médio" — as duas premissas são editadas na Central de Informações do Cliente. Sem elas configuradas, aparece "—".\n\n' +
-    'Cálculo: (Conversões dos últimos 30 dias ÷ Leads p/ fechar) × Ticket médio.',
+    'Receita (mês corrente) = Vendas do mês informadas pelo cliente × Ticket médio\n\n' +
+    'Nenhuma plataforma de anúncio reporta faturamento: o cliente informa no Portal quantas vendas fez no mês, e o app multiplica pelo "Ticket médio" da Central de Informações. Enquanto as vendas do mês não forem informadas, aparece "—".\n\n' +
+    'Cálculo: Vendas informadas do mês × Ticket médio.',
 
   gastoTotal:
     'Gasto Total = Investimento em mídia + Mensalidade da agência\n\n' +
@@ -19,14 +19,14 @@ export const kpiDescriptions = {
     'Cálculo: Investimento + Mensalidade, no mesmo período.',
 
   lucro:
-    'Resultado estimado = Receita estimada menos Gasto Total\n\n' +
-    'Quanto sobrou depois de descontar tanto o investimento em mídia quanto a mensalidade da agência da Receita estimada a partir dos Leads — mesma fórmula do "Resumo financeiro" (aba Financeiro). Sem a Receita configurada (premissas na Central de Informações do Cliente), aparece "—".\n\n' +
-    'Cálculo: Receita − (Investimento + Mensalidade), no mesmo período.',
+    'Resultado (mês corrente) = Receita menos Gasto Total do mês\n\n' +
+    'Quanto sobrou depois de descontar da Receita (vendas informadas × ticket) o investimento em mídia do mês e a mensalidade da agência — mesma fórmula do "Resumo financeiro". Sem as vendas do mês informadas, aparece "—".\n\n' +
+    'Cálculo: Receita do mês − (Investimento do mês + Mensalidade).',
 
   roas:
     'ROAS = Retorno sobre Investimento em Anúncios (Return on Ad Spend)\n\n' +
-    'Mostra quanto foi gerado em receita para cada real investido em anúncios. Um ROAS de 4x significa que cada R$ 1 investido gerou R$ 4 em receita. Cruza a Receita estimada (a partir de Leads) com o Investimento real sincronizado.\n\n' +
-    'Cálculo: Receita estimada ÷ Investimento dos últimos 30 dias.',
+    'Mostra quanto foi gerado em receita para cada real investido em anúncios. Um ROAS de 4x significa que cada R$ 1 investido gerou R$ 4 em receita. Cruza a Receita do mês (vendas informadas pelo cliente × ticket médio) com o Investimento real sincronizado do mês.\n\n' +
+    'Cálculo: Receita do mês ÷ Investimento do mês (dia 1 até hoje). Sem vendas informadas, aparece "—".',
 
   cpa:
     'CPA = Custo por Aquisição\n\n' +
