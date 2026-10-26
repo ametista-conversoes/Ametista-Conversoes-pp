@@ -659,7 +659,7 @@ async function seedClinicaSorriso(supabase: SupabaseClient, clientId: string, to
     { title: 'Gerar 120 leads no mês', client_id: clientId, metric_type: 'leads', target_value: 120, current_value: Math.round(120 * elapsed), target_date: lastDay3, status: 'on_track' },
     { title: 'Fechar 14 tratamentos no mês', client_id: clientId, metric_type: 'vendas', target_value: 14, current_value: Math.round(14 * elapsed), target_date: lastDay3, status: 'on_track' },
     { title: 'Manter CPA abaixo de R$160', client_id: clientId, metric_type: 'cpa', target_value: 160, current_value: 150, target_date: lastDay3, status: 'on_track' },
-    { title: 'Qualificar 70% dos leads em até 48h', client_id: clientId, metric_type: 'leads_qualificados', target_value: 70, current_value: 65, target_date: lastDay3, status: 'at_risk' },
+    { title: 'Qualificar 70% dos leads em até 48h', client_id: clientId, metric_type: 'Taxa de qualificação em 48h', unit: 'percent', target_value: 70, current_value: 65, target_date: lastDay3, status: 'at_risk' },
   ])
 
   // ---- Atividades (reaproveita Workflows de Atividades reais) ----
