@@ -878,7 +878,7 @@ Também conferido nesta rodada (sem achado, documentado como "ok"): zero uso de 
 - [x] **Migrar para Tailwind 4** — **concluído na Fase 57** — único jeito de fechar os 8 alertas restantes (`braces`, `micromatch`, `chokidar`, `fast-glob`, `postcss-nested`, `postcss-selector-parser`, `tailwindcss`, `tailwindcss-animate`), todos da cadeia do Tailwind 3. Risco real nulo hoje (ferramenta de build, sem entrada externa). Mudança grande: `tailwind.config` vira CSS, `tailwindcss-animate` → `tw-animate-css`, revisar shadcn/ui e o visual do app inteiro.
 - [x] `approval-revision-task.spec.ts` falha na 1ª execução e passa na 2ª (instável) — investigar.
 - [x] `fase50b-demo-data-buttons.spec.ts` termina em "Remover" e deixa os dados demo apagados — fazer terminar com "Recriar".
-- [ ] Checklist 1.1: trocar "Registrar funil e metas na aba Metas SMART" por "Metas SMART → Montar funil".
+- [x] Checklist 1.1 (feito pelo usuário): trocar "Registrar funil e metas na aba Metas SMART" por "Metas SMART → Montar funil".
 
 ## Fase 54 — Metas SMART: barra invertida, progresso automático e lista do funil
 
@@ -927,3 +927,4 @@ Decisões do usuário: o cliente registra no Dashboard; "Vendas do mês" = soma 
 - [x] **Telas**: card "Etiquetas da semana" no Dashboard do cliente (semana atual + 3 anteriores); card "Vendas do mês" vira só leitura no mês que tem semanas ("soma de N semana(s)"); card "Etiquetas do WhatsApp" na ficha do cliente (gestor) com funil do mês — leads → qualificados → agendados → vendas, etapas acumuladas — e a tabela das semanas.
 - [x] Testes: `label-funnel.test.ts` (semana/mês da sexta, funil acumulado), `fase59-etiquetas-semanais.spec.ts` (cliente registra, vendas do mês = soma, gestor vê o funil, RLS). tsc, 121 unitários e e2e de Fase 58/59 verdes.
 - [ ] Testar com uma semana de dados reais (passo final da tarefa do Kanban).
+- [x] Testes manuais do usuário (27/10): logo nova no computador e no celular; etiquetas da semana + vendas do mês pela soma + funil na ficha; meta "Qualificar 70%" da Clínica; PDF de aprovação de anúncios de Pesquisa (gerar, enviar com preço/oferta, aprovar/revisão/rejeitar).
