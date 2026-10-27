@@ -334,7 +334,8 @@ export default function Assets() {
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {connection.status === 'connected' && connection.provider === 'google_forms' && (
+                      {connection.status === 'connected' &&
+                        (connection.provider === 'google_forms' || connection.provider === 'site_form') && (
                         <FormResponsesDialog
                           connectionId={connection.id}
                           formTitle={connection.external_account_name}

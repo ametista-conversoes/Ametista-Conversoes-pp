@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { ConnectIntegrationDialog } from '@/components/assets/ConnectIntegrationDialog'
 import { AssetFormDialog } from '@/components/assets/AssetFormDialog'
 import { SelectGoogleAdsAccountDialog } from '@/components/assets/SelectGoogleAdsAccountDialog'
+import { SiteFormWebhookPanel } from '@/components/assets/SiteFormWebhookPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,6 +47,9 @@ export function AssetCard({ asset, deleteMode, connections }: AssetCardProps) {
   // os dois ficavam juntos ao mesmo tempo, contraintuitivo — pedido
   // explícito do usuário).
   const connectedConnection = assetConnections.find((c) => c.status === 'connected')
+  // Fase 60 — formulário do site não tem OAuth: a conexão nasce com o
+  // ativo e o card mostra a URL do webhook no lugar de conectar/desconectar.
+  const siteFormConnection = assetConnections.find((c) => c.provider === 'site_form')
 
   async function handleSync(connectionId: string) {
     setSyncingId(connectionId)
@@ -113,71 +117,75 @@ export function AssetCard({ asset, deleteMode, connections }: AssetCardProps) {
           </code>
         )}
 
-        <div className="space-y-1.5">
-          {assetConnections.map((connection) => (
-            <div key={connection.id} className="space-y-1">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <Plug className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="text-muted-foreground">{connectionProviderLabels[connection.provider] ?? connection.provider}</span>
-                  <Badge className={connectionStatusStyles[connection.status]}>
-                    {connectionStatusLabels[connection.status] ?? connection.status}
-                  </Badge>
-                </span>
-                {connection.status === 'connected' &&
-                  (connection.provider === 'google_ads' || connection.provider === 'meta_ads') &&
-                  (connection.external_account_id ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                      disabled={syncingId === connection.id}
-                      onClick={() => handleSync(connection.id)}
-                    >
-                      <RefreshCw className={`h-3 w-3 ${syncingId === connection.id ? 'animate-spin' : ''}`} />
-                      Sincronizar agora
-                    </Button>
-                  ) : (
-                    connection.provider === 'google_ads' && <SelectGoogleAdsAccountDialog connectionId={connection.id} />
-                  ))}
+        {siteFormConnection ? (
+          <SiteFormWebhookPanel connection={siteFormConnection} />
+        ) : (
+          <div className="space-y-1.5">
+            {assetConnections.map((connection) => (
+              <div key={connection.id} className="space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <Plug className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="text-muted-foreground">{connectionProviderLabels[connection.provider] ?? connection.provider}</span>
+                    <Badge className={connectionStatusStyles[connection.status]}>
+                      {connectionStatusLabels[connection.status] ?? connection.status}
+                    </Badge>
+                  </span>
+                  {connection.status === 'connected' &&
+                    (connection.provider === 'google_ads' || connection.provider === 'meta_ads') &&
+                    (connection.external_account_id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        disabled={syncingId === connection.id}
+                        onClick={() => handleSync(connection.id)}
+                      >
+                        <RefreshCw className={`h-3 w-3 ${syncingId === connection.id ? 'animate-spin' : ''}`} />
+                        Sincronizar agora
+                      </Button>
+                    ) : (
+                      connection.provider === 'google_ads' && <SelectGoogleAdsAccountDialog connectionId={connection.id} />
+                    ))}
+                </div>
+                {/* Fase 35.2 — nome de verdade do formulário, diferente do
+                    nome do Ativo Digital (que é só um rótulo escolhido por
+                    quem cadastrou) — sem isso não dava pra saber qual
+                    formulário real cada Ativo "google forms N" representava. */}
+                {connection.provider === 'google_forms' && connection.external_account_name && (
+                  <p className="pl-4 text-xs text-muted-foreground/70">Formulário: {connection.external_account_name}</p>
+                )}
+                {(connection.provider === 'google_ads' || connection.provider === 'meta_ads') && connection.external_account_name && (
+                  <p className="pl-4 text-xs text-muted-foreground/70">Conta: {connection.external_account_name}</p>
+                )}
               </div>
-              {/* Fase 35.2 — nome de verdade do formulário, diferente do
-                  nome do Ativo Digital (que é só um rótulo escolhido por
-                  quem cadastrou) — sem isso não dava pra saber qual
-                  formulário real cada Ativo "google forms N" representava. */}
-              {connection.provider === 'google_forms' && connection.external_account_name && (
-                <p className="pl-4 text-xs text-muted-foreground/70">Formulário: {connection.external_account_name}</p>
-              )}
-              {(connection.provider === 'google_ads' || connection.provider === 'meta_ads') && connection.external_account_name && (
-                <p className="pl-4 text-xs text-muted-foreground/70">Conta: {connection.external_account_name}</p>
-              )}
-            </div>
-          ))}
-          {connectedConnection ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 w-full text-xs text-destructive hover:text-destructive"
-              disabled={disconnectIntegration.isPending}
-              onClick={() => disconnectIntegration.mutate(connectedConnection.id)}
-            >
-              <Unplug className="h-3.5 w-3.5" />
-              {disconnectIntegration.isPending ? 'Desconectando...' : 'Desconectar integração'}
-            </Button>
-          ) : (
-            <ConnectIntegrationDialog
-              asset={asset}
-              trigger={
-                <Button type="button" variant="outline" size="sm" className="h-7 w-full text-xs">
-                  <Plug className="h-3.5 w-3.5" />
-                  Conectar integração
-                </Button>
-              }
-            />
-          )}
-        </div>
+            ))}
+            {connectedConnection ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 w-full text-xs text-destructive hover:text-destructive"
+                disabled={disconnectIntegration.isPending}
+                onClick={() => disconnectIntegration.mutate(connectedConnection.id)}
+              >
+                <Unplug className="h-3.5 w-3.5" />
+                {disconnectIntegration.isPending ? 'Desconectando...' : 'Desconectar integração'}
+              </Button>
+            ) : (
+              <ConnectIntegrationDialog
+                asset={asset}
+                trigger={
+                  <Button type="button" variant="outline" size="sm" className="h-7 w-full text-xs">
+                    <Plug className="h-3.5 w-3.5" />
+                    Conectar integração
+                  </Button>
+                }
+              />
+            )}
+          </div>
+        )}
 
         <div className="mt-auto flex items-center justify-between pt-3">
           <DropdownMenu>

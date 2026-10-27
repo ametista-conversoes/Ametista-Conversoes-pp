@@ -11,11 +11,15 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useLeadQuestions, useLeads, useSetLeadStatus, type LeadStatus } from '@/hooks/useClientPortalData'
 import { useMarkNavSeen } from '@/hooks/useNavSeen'
 import { formatDateTime } from '@/lib/format'
-import { leadStatusLabels, leadStatusStyles } from '@/lib/status-styles'
+import { leadSourceLabels, leadStatusLabels, leadStatusStyles } from '@/lib/status-styles'
 import { cn } from '@/lib/utils'
 
 const FILTERS = ['todos', 'novo', 'qualificado', 'venda', 'perdido'] as const
 type Filter = (typeof FILTERS)[number]
+
+// Fase 60 — filtro por origem (formulário do site x Google Forms).
+const SOURCE_FILTERS = ['todas', 'site_form', 'google_forms'] as const
+type SourceFilter = (typeof SOURCE_FILTERS)[number]
 
 const LEAD_STATUS_OPTIONS: LeadStatus[] = ['novo', 'qualificado', 'venda', 'perdido']
 
@@ -34,6 +38,7 @@ export default function Leads() {
   const { data: questions } = useLeadQuestions(connectionIds)
   const setStatus = useSetLeadStatus()
   const [filter, setFilter] = useState<Filter>('todos')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('todas')
 
   if (!clientId) {
     return <UnlinkedClientNotice page="Leads" />
@@ -46,7 +51,10 @@ export default function Leads() {
   const questionTitles = new Map((questions ?? []).map((q) => [`${q.connection_id}|${q.external_question_id}`, q.title]))
 
   const allLeads = leads ?? []
-  const filteredLeads = filter === 'todos' ? allLeads : allLeads.filter((lead) => lead.status === filter)
+  const filteredLeads = allLeads.filter(
+    (lead) => (filter === 'todos' || lead.status === filter) && (sourceFilter === 'todas' || lead.source === sourceFilter),
+  )
+  const hasSiteLeads = allLeads.some((lead) => lead.source === 'site_form')
 
   return (
     <div className="space-y-6">
@@ -55,7 +63,8 @@ export default function Leads() {
           <p className="text-sm text-muted-foreground">Portal Cliente</p>
           <h1 className="text-2xl font-semibold text-foreground">Leads</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Respostas dos formulários conectados — marque o status de cada uma conforme a negociação avança.
+            Respostas dos formulários conectados (site e Google Forms) — marque o status de cada uma conforme a negociação
+            avança.
           </p>
         </div>
         {clientId && (
@@ -87,6 +96,25 @@ export default function Leads() {
         ))}
       </div>
 
+      {hasSiteLeads && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Origem:</span>
+          {SOURCE_FILTERS.map((source) => (
+            <button key={source} type="button" onClick={() => setSourceFilter(source)}>
+              <Badge
+                className={
+                  sourceFilter === source
+                    ? 'border-purple-600/20 bg-purple-600/15 text-purple-400'
+                    : 'border-[#1A2540] bg-secondary/50 text-muted-foreground'
+                }
+              >
+                {source === 'todas' ? 'Todas' : leadSourceLabels[source]}
+              </Badge>
+            </button>
+          ))}
+        </div>
+      )}
+
       {filteredLeads.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {allLeads.length === 0
@@ -102,6 +130,9 @@ export default function Leads() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-muted-foreground">{formatDateTime(lead.submitted_at)}</p>
+                  <Badge className="border-[#1A2540] bg-secondary/50 text-muted-foreground">
+                    {leadSourceLabels[lead.source] ?? lead.source}
+                  </Badge>
                   {lead.status === 'novo' && lead.submitted_at && differenceInMinutes(new Date(), new Date(lead.submitted_at)) > 15 && (
                     <span className="text-xs font-medium text-amber-400">
                       Passou de 15 min sem resposta
@@ -126,6 +157,14 @@ export default function Leads() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              {(lead.utm_content || lead.utm_campaign) && (
+                <div className="rounded-md bg-secondary/50 px-2 py-1.5 text-xs">
+                  <span className="text-muted-foreground">Anúncio: </span>
+                  <span className="text-purple-300">{lead.utm_content ?? '—'}</span>
+                  {lead.utm_campaign && <span className="text-muted-foreground"> · Campanha: {lead.utm_campaign}</span>}
+                  {lead.utm_source && <span className="text-muted-foreground"> · {lead.utm_source}</span>}
+                </div>
+              )}
               <div className="space-y-1.5 text-sm">
                 {lead.form_answers.map((answer) => (
                   <div key={answer.external_question_id}>

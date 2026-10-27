@@ -334,3 +334,39 @@ export async function listCampaignInsights(connectionId: string, campaignId: str
   if (!res.ok) throw new Error(body.error ?? 'Não foi possível buscar os resumos da campanha.')
   return body as CampaignInsights
 }
+
+// Fase 60 — formulário do site (Elementor). A URL leva a chave do ativo
+// (?k=); o Elementor chama servidor-a-servidor, sem login.
+export function siteFormWebhookUrl(key: string): string {
+  return `${FUNCTIONS_BASE}/site-form-webhook?k=${encodeURIComponent(key)}`
+}
+
+export interface SiteFormTestResult {
+  ok: boolean
+  campos?: Array<{ id: string; rotulo: string; valor: string }>
+  tracking?: Record<string, string | null>
+  error?: string
+}
+
+/** "Enviar lead de teste": manda um corpo de exemplo no formato "Dados
+ * avançados" do Elementor com `&test=1` — a rota só interpreta e devolve o
+ * resultado, sem criar lead. */
+export async function sendSiteFormTest(key: string): Promise<SiteFormTestResult> {
+  const body = new URLSearchParams({
+    'fields[name][title]': 'Nome',
+    'fields[name][value]': 'Lead de teste',
+    'fields[whatsapp][title]': 'WhatsApp',
+    'fields[whatsapp][value]': '(11) 90000-0000',
+    'fields[utm_source][value]': 'teste',
+    'fields[utm_content][value]': '#001 | VID | Teste | v1',
+    'meta[page_url][value]': 'https://exemplo.com.br/lp',
+  })
+  const res = await fetchFriendly(`${siteFormWebhookUrl(key)}&test=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+  const result = (await res.json()) as SiteFormTestResult
+  if (!res.ok) throw new Error(result.error ?? 'A URL do webhook não respondeu como esperado.')
+  return result
+}

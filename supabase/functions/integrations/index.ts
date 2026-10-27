@@ -63,6 +63,8 @@
 //   POST .../integrations/forms-webhook   { formId, responseId, submittedAt, answers }
 //                                          (cabeçalho X-Webhook-Secret — continua só criando o
 //                                          Alerta genérico de "nova resposta", sem mudança)
+//   POST .../integrations/site-form-webhook?k=<chave>  (Fase 60 — formulário do site/Elementor,
+//                                          chave por ativo; cria o lead em form_responses)
 //
 // Fase 28 — conta administradora da agência (MCC no Google Ads, Business
 // Manager no Meta), autenticada 1x em vez de por cliente. Conexões de
@@ -82,6 +84,7 @@
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { timingSafeEqual } from 'node:crypto'
+import { parseSiteFormBody, toSiteFormLead } from './site-form.ts'
 
 const PROVIDERS = ['google_ads', 'google_forms', 'meta_ads'] as const
 type Provider = (typeof PROVIDERS)[number]
@@ -2808,6 +2811,128 @@ async function handleFormsWebhook(req: Request) {
   return jsonResponse({ ok: true })
 }
 
+// Fase 60 — formulário do site (Elementor) virando lead. A chave vai na URL
+// (?k=) porque o webhook do Elementor não deixa mandar cabeçalho.
+const SITE_FORM_MAX_BODY_BYTES = 64 * 1024
+const SITE_FORM_DEDUPE_MS = 2 * 60 * 1000
+
+/** POST /site-form-webhook?k=<chave>. Chave válida → sempre 200 (se o
+ * Elementor recebe erro, mostra falha pro visitante e o lead se perde);
+ * erro interno vai pro error_logs. Só chave inválida devolve 401.
+ * `&test=1` (botão "Enviar lead de teste" do card do ativo) só interpreta o
+ * corpo e devolve o resultado, sem gravar nada. */
+async function handleSiteFormWebhook(req: Request, url: URL) {
+  const key = url.searchParams.get('k') ?? ''
+  if (!key) return jsonResponse({ error: 'Não autorizado' }, 401)
+
+  const supabase = getServiceClient()
+  const { data: connection, error: connectionError } = await supabase
+    .from('digital_asset_connections')
+    .select('id, webhook_key, digital_assets(client_id)')
+    .eq('provider', 'site_form')
+    .eq('webhook_key', key)
+    .maybeSingle()
+  if (connectionError) return dbErrorResponse('handleSiteFormWebhook: buscar conexão', connectionError)
+  if (!connection?.webhook_key || !safeCompare(key, connection.webhook_key)) {
+    return jsonResponse({ error: 'Não autorizado' }, 401)
+  }
+
+  const limited = await enforceRateLimit(connection.id, [{ bucket: 'site_form_webhook', windowSeconds: 60, maxHits: 30 }])
+  if (limited) return limited
+
+  const rawBody = await req.text()
+  const isTest = url.searchParams.get('test') === '1'
+
+  try {
+    if (new TextEncoder().encode(rawBody).length > SITE_FORM_MAX_BODY_BYTES) throw new Error('corpo maior que 64 KB')
+    const contentType = req.headers.get('content-type') ?? ''
+    const lead = toSiteFormLead(parseSiteFormBody(contentType, rawBody))
+    if (isTest) return jsonResponse({ ok: true, test: true, ...lead })
+
+    const clientId = (connection.digital_assets as unknown as { client_id: string }).client_id
+
+    if (lead.contactKey) {
+      const { data: recent, error: recentError } = await supabase
+        .from('form_responses')
+        .select('id')
+        .eq('connection_id', connection.id)
+        .eq('contact_key', lead.contactKey)
+        .gte('created_at', new Date(Date.now() - SITE_FORM_DEDUPE_MS).toISOString())
+        .limit(1)
+      if (recentError) throw recentError
+      if (recent && recent.length > 0) return jsonResponse({ ok: true, duplicate: true })
+    }
+
+    if (lead.campos.length > 0) {
+      const { error: questionsError } = await supabase.from('form_questions').upsert(
+        lead.campos.map((campo, position) => ({
+          connection_id: connection.id,
+          external_question_id: campo.id,
+          title: campo.rotulo,
+          question_type: 'text_short',
+          position,
+        })),
+        { onConflict: 'connection_id,external_question_id' },
+      )
+      if (questionsError) throw questionsError
+    }
+
+    let rawPayload: unknown = rawBody
+    try {
+      rawPayload = rawBody.trim().startsWith('{') ? JSON.parse(rawBody) : Object.fromEntries(new URLSearchParams(rawBody))
+    } catch {
+      // guarda como texto mesmo
+    }
+
+    const now = new Date().toISOString()
+    const { data: response, error: responseError } = await supabase
+      .from('form_responses')
+      .insert({
+        connection_id: connection.id,
+        external_response_id: crypto.randomUUID(),
+        client_id: clientId,
+        submitted_at: now,
+        status: 'novo',
+        source: 'site_form',
+        ...lead.tracking,
+        page_url: lead.pageUrl,
+        contact_key: lead.contactKey,
+        raw_payload: rawPayload,
+      })
+      .select('id')
+      .single()
+    if (responseError) throw responseError
+
+    const answers = lead.campos
+      .filter((campo) => campo.valor.trim())
+      .map((campo) => ({ response_id: response.id, external_question_id: campo.id, answer_text: campo.valor.trim() }))
+    if (answers.length > 0) {
+      const { error: answersError } = await supabase
+        .from('form_answers')
+        .upsert(answers, { onConflict: 'response_id,external_question_id' })
+      if (answersError) throw answersError
+    }
+
+    await supabase.from('digital_asset_connections').update({ last_synced_at: now }).eq('id', connection.id)
+
+    const adLine = lead.tracking.utm_content ? `\nAnúncio: ${lead.tracking.utm_content}` : ''
+    const { error: alertError } = await supabase.from('alerts').insert({
+      title: 'Novo lead do site',
+      message: (lead.campos.map((campo) => `${campo.rotulo}: ${campo.valor}`).join('\n') || 'Lead recebido sem campos.') + adLine,
+      client_id: clientId,
+      severity: 'medium',
+      category: 'novo_lead',
+    })
+    if (alertError) throw alertError
+  } catch (err) {
+    console.error('[integrations] handleSiteFormWebhook: falha ao gravar lead do site')
+    await logServerError('integrations', `handleSiteFormWebhook: conexão ${connection.id}`, err)
+    if (isTest) return jsonResponse({ ok: false, test: true, error: 'Não foi possível interpretar o corpo enviado.' })
+  }
+
+  return jsonResponse({ ok: true })
+}
+
 /** Lista as contas de anúncio reais do Google Ads que uma conexão
  * enxerga (Fase 20) — usada quando `handleCallback` não conseguiu
  * escolher sozinho (0 ou mais de 1 conta encontrada). Nunca inclui
@@ -3300,11 +3425,12 @@ async function routeRequest(req: Request, url: URL): Promise<Response> {
     if (req.method === 'POST' && url.pathname.endsWith('/select-account')) return await handleSelectAccount(req)
     if (req.method === 'POST' && url.pathname.endsWith('/sync-all')) return await handleSyncAll(req)
     if (req.method === 'POST' && url.pathname.endsWith('/sync')) return await handleSync(req)
+    if (req.method === 'POST' && url.pathname.endsWith('/site-form-webhook')) return await handleSiteFormWebhook(req, url)
     if (req.method === 'POST' && url.pathname.endsWith('/forms-webhook')) return await handleFormsWebhook(req)
     return jsonResponse(
       {
         error:
-          'Rota não encontrada. Use /agency-connect, /agency-accounts, /agency-businesses, /select-agency-business, /link-agency-account, /connect-with-token, /agency-disconnect, /disconnect, /connect, /callback, /campaigns, /ad-groups, /campaign-insights, /accounts, /select-account, /sync, /sync-all ou /forms-webhook.',
+          'Rota não encontrada. Use /agency-connect, /agency-accounts, /agency-businesses, /select-agency-business, /link-agency-account, /connect-with-token, /agency-disconnect, /disconnect, /connect, /callback, /campaigns, /ad-groups, /campaign-insights, /accounts, /select-account, /sync, /sync-all, /forms-webhook ou /site-form-webhook.',
       },
       404,
     )

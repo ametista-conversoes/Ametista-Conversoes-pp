@@ -490,6 +490,12 @@ export interface LeadResponseRecord {
   submitted_at: string | null
   status: LeadStatus
   form_answers: LeadAnswerRecord[]
+  /** Fase 60 — origem do lead e anúncio de onde veio (UTM do formulário do
+   * site; utm_content = nome do anúncio "#Código | Formato | Ângulo | Versão"). */
+  source: 'google_forms' | 'site_form'
+  utm_source: string | null
+  utm_campaign: string | null
+  utm_content: string | null
 }
 
 export function useLeads() {
@@ -499,7 +505,9 @@ export function useLeads() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('form_responses')
-        .select('id, connection_id, submitted_at, status, form_answers(external_question_id, answer_text)')
+        .select(
+          'id, connection_id, submitted_at, status, source, utm_source, utm_campaign, utm_content, form_answers(external_question_id, answer_text)',
+        )
         .eq('client_id', clientId as string)
         .order('submitted_at', { ascending: false })
       if (error) throw error

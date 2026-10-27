@@ -224,6 +224,9 @@ export const digitalAssetTypeLabels: Record<string, string> = {
   // formulário" (Genérico/Vendas/Objeções) no próprio formulário de
   // criar/editar Ativo, antes de existir qualquer conexão.
   google_forms: 'Formulário (Google Forms)',
+  // Fase 60 — salvar um ativo desse tipo já cria a conexão com a URL do
+  // webhook (gatilho da migration-108).
+  site_form: 'Formulário do site (WordPress/Elementor)',
   other: 'Outro',
 }
 
@@ -304,6 +307,13 @@ export const connectionProviderLabels: Record<string, string> = {
   google_ads: 'Google Ads',
   google_forms: 'Google Forms',
   meta_ads: 'Meta Ads',
+  site_form: 'Formulário do site',
+}
+
+// Fase 60 — origem do lead na aba Leads (`form_responses.source`).
+export const leadSourceLabels: Record<string, string> = {
+  site_form: 'Formulário do site',
+  google_forms: 'Google Forms',
 }
 
 // Estado de campanha (last_known_status de project_campaign_links,

@@ -2620,6 +2620,9 @@ export interface DigitalAssetConnectionRecord {
    * resposta nova sincronizada (ainda "novo") já nasce classificada
    * como Venda/Perdido sozinha, sem precisar de clique manual. */
   form_purpose: 'vendas' | 'perdido' | null
+  /** Fase 60 — só no provider 'site_form': chave da URL do webhook do
+   * formulário do site (RLS da conexão: só admin/gestor leem). */
+  webhook_key: string | null
 }
 
 /** Conexões de integração (Fase 6.1/6.2) — quem escreve aqui é sempre
@@ -2632,10 +2635,29 @@ export function useDigitalAssetConnections() {
       const { data, error } = await supabase
         .from('digital_asset_connections')
         .select(
-          'id, digital_asset_id, provider, status, project_id, external_account_id, external_account_name, last_synced_at, form_purpose',
+          'id, digital_asset_id, provider, status, project_id, external_account_id, external_account_name, last_synced_at, form_purpose, webhook_key',
         )
       if (error) throw error
       return data as DigitalAssetConnectionRecord[]
+    },
+  })
+}
+
+/** Fase 60 — "Gerar nova chave" do formulário do site: a URL antiga para
+ * de funcionar na hora (RPC `rotate_site_form_key`, migration-108). */
+export function useRotateSiteFormKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (connectionId: string) => {
+      const { error } = await supabase.rpc('rotate_site_form_key', { p_connection_id: connectionId })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['digital-asset-connections'] })
+      toast.success('Nova chave gerada. Cole a URL nova no Elementor.')
+    },
+    onError: () => {
+      toast.error('Não foi possível gerar a nova chave.')
     },
   })
 }
@@ -3192,6 +3214,8 @@ export function useCreateDigitalAsset() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-digital-assets'] })
+      // Fase 60 — ativo "Formulário do site" já nasce com a conexão (gatilho).
+      queryClient.invalidateQueries({ queryKey: ['digital-asset-connections'] })
     },
     onError: () => {
       toast.error('Não foi possível criar o ativo digital.')
