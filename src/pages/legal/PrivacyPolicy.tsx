@@ -2,7 +2,7 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
 
 export default function PrivacyPolicy() {
   return (
-    <LegalPageLayout title="Política de Privacidade" lastUpdated="28 de setembro de 2026" altLangHref="/privacy/en">
+    <LegalPageLayout title="Política de Privacidade" lastUpdated="27 de outubro de 2026" altLangHref="/privacy/en">
       <section>
         <h2>1. Quem somos</h2>
         <p>
@@ -37,6 +37,12 @@ export default function PrivacyPolicy() {
             sincronizamos as perguntas e respostas desse formulário — que podem incluir dados pessoais de quem
             respondeu (nome, e-mail, telefone, respostas abertas). Esse dado pertence ao cliente da agência que
             criou o formulário; processamos em nome dele.
+          </li>
+          <li>
+            <strong>Leads do formulário do site do cliente</strong>: quando o formulário da landing page do cliente é
+            ligado ao app (webhook), recebemos os campos que o visitante preencheu (como nome, WhatsApp, e-mail e
+            interesse), a página de origem e os parâmetros do anúncio que trouxe a visita (UTM, gclid, fbclid). Esse
+            dado também pertence ao cliente da agência; processamos em nome dele.
           </li>
           <li>
             <strong>Conversas com a Cassie (assistente de IA)</strong> e com a ferramenta de Comunicação Persuasiva —

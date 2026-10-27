@@ -6,7 +6,7 @@ import { LegalPageLayout } from '@/components/legal/LegalPageLayout'
  * esse arquivo precisa ser atualizado à mão junto. */
 export default function PrivacyPolicyEn() {
   return (
-    <LegalPageLayout title="Privacy Policy" lastUpdated="September 28, 2026" lang="en" altLangHref="/privacy">
+    <LegalPageLayout title="Privacy Policy" lastUpdated="October 27, 2026" lang="en" altLangHref="/privacy">
       <section>
         <h2>1. Who we are</h2>
         <p>
@@ -37,6 +37,12 @@ export default function PrivacyPolicyEn() {
             <strong>Google Forms responses</strong>: when a lead-capture form is connected, we sync that form's
             questions and responses — which may include personal data of the respondent (name, email, phone, open
             answers). This data belongs to the agency client who created the form; we process it on their behalf.
+          </li>
+          <li>
+            <strong>Leads from the client's website form</strong>: when the form on the client's landing page is
+            linked to the app (webhook), we receive the fields the visitor filled in (such as name, WhatsApp, email and
+            interest), the page it came from and the parameters of the ad that brought the visit (UTM, gclid, fbclid).
+            This data also belongs to the agency client; we process it on their behalf.
           </li>
           <li>
             <strong>Conversations with Cassie (AI assistant)</strong> and with the Persuasive Copy tool — the

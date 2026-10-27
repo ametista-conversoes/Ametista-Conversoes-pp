@@ -939,3 +939,12 @@ Escolha de desenho: o lead do site vai pra MESMA tabela dos leads de formulário
 - [x] Testes: `site-form.test.ts` (3 formatos, UTM, page_url, contato). `fase60-formulario-do-site.spec.ts` contra a função publicada: chave gerada, 401, cliente não lê a chave, teste sem gravar, lead Novo com UTM, dedupe, modo simples e JSON, card do gestor, aba Leads do cliente. tsc, build, 127 unitários e 6 e2e verdes.
 - [ ] Teste real: cadastrar o ativo do cliente, colar a URL no Elementor (Dados avançados ligado), enviar pelo celular com `?utm_source=teste&utm_content=%23001%20%7C%20VID%20%7C%20Teste%20%7C%20v1` e ver o lead Novo com o anúncio. Conferir o `raw_payload` desse 1º envio.
 - [ ] Opcional (anotado, não feito): bloco "Leads e vendas por anúncio" na Análise do gestor, agrupando por `utm_content`.
+
+## Fase 61 — Página pública do app virou vitrine para o cliente (esboço no Obsidian "Esboço — Página do site do app")
+
+Decisões do usuário: site da agência = https://www.ametistaconversoes.com; planos ficam no site (só link); botões de contato = WhatsApp da agência (sem pixel/tag nesta página — rastreamento de anúncio é feito na conta própria, no site); a página fala só com o cliente.
+
+- [x] `Landing.tsx` reescrita com os textos da seção "Aplicativo Ametista" do site: hero ("O aplicativo da Ametista para acompanhar seu crescimento."), 6 recursos, como funciona (3 passos), segurança e transparência, 4 dúvidas, chamada final (WhatsApp + planos no site) e About (English) atualizado com os leads do formulário do site. Mantido o exigido pela verificação OAuth: descrição "só leitura", links PT/EN de Privacidade e Termos, mesma URL.
+- [x] Imagem do topo: celular com o Dashboard do **Portal do Cliente** montado em código (`ClientDashboardMockup`, mesma ilustração do site), no lugar do `hero-mockup.png` (Dashboard Executivo do gestor), que foi removido.
+- [x] Política de Privacidade (PT/EN): novo item sobre os leads do formulário do site (campos, página de origem, UTM/gclid/fbclid), data atualizada para 27/10/2026.
+- [x] Teste `fase61-pagina-publica.spec.ts`: itens exigidos pelo Google, links do site/planos/WhatsApp/Entrar, sem rolagem horizontal no celular. Prints de computador e celular conferidos.
