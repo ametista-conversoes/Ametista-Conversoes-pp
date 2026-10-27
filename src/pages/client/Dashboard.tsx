@@ -9,6 +9,7 @@ import { KpiCard } from '@/components/dashboard/KpiCard'
 import { LatestManagerAnalysisCard } from '@/components/dashboard/LatestManagerAnalysisCard'
 import { MetricDetailDialog } from '@/components/dashboard/MetricDetailDialog'
 import { MonthlySalesCard } from '@/components/dashboard/MonthlySalesCard'
+import { WeeklyLabelsCard } from '@/components/dashboard/WeeklyLabelsCard'
 import { NotificationsCard } from '@/components/dashboard/NotificationsCard'
 import { UpcomingMeetingsCard } from '@/components/dashboard/UpcomingMeetingsCard'
 import { UnlinkedClientNotice } from '@/components/shared/UnlinkedClientNotice'
@@ -130,6 +131,7 @@ export default function Dashboard() {
           />
           <UpcomingMeetingsCard meetings={meetings ?? []} />
           <AssignedTasksCard tasks={tasks ?? []} />
+          {clientId && <WeeklyLabelsCard clientId={clientId} />}
           {clientId && <MonthlySalesCard clientId={clientId} />}
           <FinancialSummaryCard monthlyFee={client?.monthly_fee ?? null} spend={monthSpend} revenue={revenue} />
           <GoalsProgressCard goals={goals ?? []} />

@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { monthStartIso, salesForMonth, useClientMonthlySales, useSaveMonthlySales } from '@/hooks/useMonthlySales'
+import { useClientWeeklyLabels } from '@/hooks/useWeeklyLabels'
 import { formatDateTime, getTodayIsoDate } from '@/lib/format'
+import { weekMonthIso } from '@/lib/label-funnel'
 
 const MONTH_NAMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
@@ -26,13 +28,18 @@ interface MonthlySalesCardProps {
 
 /** Fase 58 — Portal do Cliente: o cliente informa quantas vendas fez no mês.
  * Faturamento e ROAS do app inteiro vêm daqui (× ticket médio); sem isso
- * eles ficam em branco. Salvar recalcula metas e relatório na hora. */
+ * eles ficam em branco. Salvar recalcula metas e relatório na hora.
+ * Fase 59: mês com etiquetas semanais registradas = soma das semanas
+ * (calculada no banco), só leitura aqui. */
 export function MonthlySalesCard({ clientId }: MonthlySalesCardProps) {
   const months = recentMonths()
   const [month, setMonth] = useState(months[0].value)
   const [draft, setDraft] = useState<string | null>(null)
   const { data: records } = useClientMonthlySales(clientId)
+  const { data: weeks } = useClientWeeklyLabels(clientId)
   const save = useSaveMonthlySales()
+  const monthWeeks = weeks?.filter((w) => weekMonthIso(w.week_start) === month) ?? []
+  const fromWeeks = monthWeeks.length > 0
 
   const saved = salesForMonth(records, month)
   const savedRecord = records?.find((r) => r.month === month)
@@ -80,22 +87,31 @@ export function MonthlySalesCard({ clientId }: MonthlySalesCardProps) {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            min="0"
-            step="1"
-            inputMode="numeric"
-            aria-label="Número de vendas"
-            placeholder="Ex: 12"
-            value={value}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-          />
-          <Button type="button" onClick={handleSave} disabled={!valid || save.isPending || parsed === saved}>
-            {save.isPending ? 'Salvando...' : 'Salvar'}
-          </Button>
-        </div>
+        {fromWeeks ? (
+          <p className="rounded-lg bg-[#1A2540] p-3 text-sm">
+            <span className="font-semibold">{saved ?? 0} venda(s)</span>{' '}
+            <span className="text-muted-foreground">
+              — soma de {monthWeeks.length} semana(s) em "Etiquetas da semana". Para corrigir, edite a semana.
+            </span>
+          </p>
+        ) : (
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              aria-label="Número de vendas"
+              placeholder="Ex: 12"
+              value={value}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+            />
+            <Button type="button" onClick={handleSave} disabled={!valid || save.isPending || parsed === saved}>
+              {save.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
           {savedRecord
             ? `Informado: ${savedRecord.sales} venda(s) · atualizado em ${formatDateTime(savedRecord.updated_at)}`

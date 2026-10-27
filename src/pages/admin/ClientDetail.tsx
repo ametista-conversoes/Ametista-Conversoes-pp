@@ -24,6 +24,7 @@ import { Client90DayMilestonesCard } from '@/components/admin/Client90DayMilesto
 import { ClientAccessCard } from '@/components/admin/ClientAccessCard'
 import { ClientAnalysesCard } from '@/components/admin/ClientAnalysesCard'
 import { ClientPerformanceMetricsCard } from '@/components/admin/ClientPerformanceMetricsCard'
+import { ClientWeeklyLabelsCard } from '@/components/admin/ClientWeeklyLabelsCard'
 import { ClientPlatformCard } from '@/components/admin/ClientPlatformCard'
 import { MetricAlertThresholdsCard } from '@/components/admin/MetricAlertThresholdsCard'
 import { NewProjectDialog } from '@/components/admin/NewProjectDialog'
@@ -626,6 +627,8 @@ export default function ClientDetail() {
       </div>
 
       <ClientPerformanceMetricsCard client={client} />
+
+      <ClientWeeklyLabelsCard clientId={client.id} />
 
       {/* Cliente em risco — só aparece se houver algum problema de verdade */}
       {riskDetails.hasProblems && (

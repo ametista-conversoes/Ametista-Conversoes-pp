@@ -892,7 +892,7 @@ Decisões do usuário: barra de CPA/CPC/CPM = meta ÷ atual; atualização autom
 
 ### Pendente
 - [x] **Resolvido na Fase 58** (vendas agora informadas pelo cliente) — Loja Aurora (e-commerce, 1 lead = 1 venda) não marca status de lead → meta de Vendas fica sempre 0. Avaliar Vendas = conversões quando "Leads p/ fechar 1 venda" = 1.
-- [ ] Clínica Sorriso (demo): meta "Qualificar 70% dos leads em até 48h" usa o tipo Leads Qualificados (contagem), mas o alvo é percentual — agora mostra 28 de 70. Corrigir o seed do demo-data.
+- [x] Clínica Sorriso (demo): meta "Qualificar 70% dos leads em até 48h" virou meta "Outro" em porcentagem (seed + UPDATE da linha existente, aprovado pelo usuário em 26/10).
 
 ## Fase 56 — Campo "Detalhes" nos itens dos Workflows (prompt do Obsidian "Detalhes nos Workflows")
 
@@ -917,3 +917,13 @@ Decisões do usuário: campo "Vendas do mês" no Portal do Cliente; faturamento 
 - [x] **Telas**: card "Vendas do mês" no Dashboard do cliente (mês atual + 2 anteriores, pode corrigir). Receita/Lucro/ROAS do mês corrente no card de Performance (Central de Informações, com "Vendas (mês)"), Dashboard e Relatórios; Histórico Mensal e PDF usam as vendas informadas (rótulos "estimada" removidos); Análise do Gestor com "Receita (mês)"/"ROAS (mês)"; projeto sem receita automática (só manual) e ROAS "—" sem receita. Gráfico diário de Receita/ROAS removido (não existe venda diária). `computeRevenueFromLeads` fica só pro planejamento do "Montar funil".
 - [x] **Demo**: `demo-data` grava vendas do mês dos 2 clientes (Clínica ≈12% dos leads; Loja Aurora = conversões) e recalcula as metas no fim do "Recriar". Conferido: Loja Aurora set/26 = 448 vendas × R$210 = R$94.080, ROAS 5,07; meta de faturamento do mês = R$430.920 (2.052 × 210), ROAS 5,60 (bate com o cálculo direto no banco).
 - [x] Testes: `metrics.test.ts` (vendas × ticket, ROAS só com investimento do mês), `fase58-vendas-do-mes.spec.ts` (cliente informa pelo Dashboard; RLS bloqueia gravar vendas de outro cliente). tsc, 118 unitários, build e 40 e2e verdes (os de demo logo depois do "Recriar" precisaram de 2ª execução, por lentidão).
+
+## Fase 59 — Logo nova e registro semanal das etiquetas do WhatsApp (tarefa do Kanban do Obsidian)
+
+Decisões do usuário: o cliente registra no Dashboard; "Vendas do mês" = soma de "Venda" das semanas (mês sem semanas continua com o valor digitado no card do mês).
+
+- [x] **Logo nova** (gema roxa no octógono, `Downloads/Ametista-logo-gema-A.png`): `logo.png`, `favicon.ico`, ícones do PWA (64/192/512), maskable (zona segura 80%, fundo `#0B1220`) e `apple-touch-icon` (fundo opaco) gerados com System.Drawing do Windows (sem instalar nada). Conferido em produção.
+- [x] **`migration-107`**: tabela `client_weekly_labels` (cliente/semana começando na segunda; Novo, Qualificado, Agendado, Venda, Perdido ≥ 0), RLS igual à de `client_monthly_sales`. Gatilho: salvar/editar/apagar uma semana soma as vendas das semanas do mês em `client_monthly_sales` (a semana conta no mês da sua sexta, dia da contagem do Kit) — o gatilho da migration-106 recalcula metas e relatório em seguida. `remove_demo_data` limpa as etiquetas. Prévia em transação revertida conferiu inserir/editar/apagar (5, 9, 2).
+- [x] **Telas**: card "Etiquetas da semana" no Dashboard do cliente (semana atual + 3 anteriores); card "Vendas do mês" vira só leitura no mês que tem semanas ("soma de N semana(s)"); card "Etiquetas do WhatsApp" na ficha do cliente (gestor) com funil do mês — leads → qualificados → agendados → vendas, etapas acumuladas — e a tabela das semanas.
+- [x] Testes: `label-funnel.test.ts` (semana/mês da sexta, funil acumulado), `fase59-etiquetas-semanais.spec.ts` (cliente registra, vendas do mês = soma, gestor vê o funil, RLS). tsc, 121 unitários e e2e de Fase 58/59 verdes.
+- [ ] Testar com uma semana de dados reais (passo final da tarefa do Kanban).
