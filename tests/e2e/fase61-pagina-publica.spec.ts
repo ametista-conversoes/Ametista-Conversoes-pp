@@ -19,6 +19,6 @@ test('página pública mantém o exigido pelo Google e leva ao site e ao WhatsAp
   await page.screenshot({ path: 'test-results/fase61-landing-desktop.png', fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
   // Sem rolagem horizontal no celular.
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  expect(await page.evaluate<number>('document.documentElement.scrollWidth')).toBeLessThanOrEqual(390)
   await page.screenshot({ path: 'test-results/fase61-landing-mobile.png', fullPage: true })
 })
