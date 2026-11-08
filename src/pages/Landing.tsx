@@ -63,7 +63,7 @@ const SHOWCASE = [
 
 const STATS = [
   { to: 90, suffix: ' dias', label: 'de plano de execução, com atividades, metas e reuniões' },
-  { to: 2, suffix: 'x', label: 'por semana a equipe revisa as campanhas' },
+  { to: 2, suffix: 'x', label: 'por semana o seu gestor revisa as campanhas' },
   { to: 1, suffix: ' dia útil', label: 'para atender um pedido de Pausa de Emergência' },
   { to: 24, suffix: 'h', label: 'de C.A.S.S.I.E. disponível para tirar dúvidas' },
 ]
@@ -92,7 +92,7 @@ const FAQ = [
   { question: 'Quem tem acesso ao aplicativo?', answer: 'Todo cliente da Ametista Conversões, em todos os planos, com login próprio.' },
   {
     question: 'O aplicativo altera minhas campanhas?',
-    answer: 'Não. Ele só lê as métricas das contas de anúncio. Qualquer mudança nas campanhas é feita pela equipe, com o seu acompanhamento.',
+    answer: 'Não. Ele só lê as métricas das contas de anúncio. Qualquer mudança nas campanhas é feita pelo seu gestor, com o seu acompanhamento.',
   },
   {
     question: 'E se eu precisar pausar uma campanha?',
