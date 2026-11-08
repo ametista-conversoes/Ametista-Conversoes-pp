@@ -957,3 +957,12 @@ Decisões do usuário: aplicar os itens 1, 2 e 4. No item 1, o termo "relatório
 - [x] **`migration-109`** (UPDATE mostrado e aprovado antes; prévia em transação revertida achou os 6 itens): só os modelos (`activity_templates.items`); cópias já aplicadas a clientes ficam como histórico. (1) 1.2 e os relatórios mensal/quinzenal/semanal do 5.2: título com "(Análise do gestor)" e detalhes explicando que o relatório do contrato é a Análise do gestor publicada no app, com o conteúdo mínimo do 4.2-VI — sai o "Desatualizado". (2) 3.2: modelo do site no Figma + Elementor, sem Lovable. (4) 5.3: rotina de sexta conferida no card "Etiquetas do WhatsApp" (cliente registra em "Etiquetas da semana").
 - [x] `docs/interno/workflow-detalhes.json` sincronizado (só as 6 linhas). Restam 11 ⚠️, todos alertas de execução (ex.: plugin de Pixel duplicado, IP dinâmico, não vincular a MCC inteira).
 - [ ] Item 3 (rotina de 20/set: remover a tarefa que só confirma o ritmo) — não aplicado, fica como está até o usuário decidir.
+
+## Fase 63 — Aba Leads para volume: status por lead opcional
+
+Decisão do usuário: marcar o status de cada lead passa a ser opcional para o cliente (um clique por lead não escala com volume alto). A obrigação semanal fica só nas Etiquetas da semana.
+
+- [x] **`migration-110`** (prévia em transação revertida antes): meta "Leads Qualificados" = soma de Qualificado + Agendado + Venda das etiquetas semanais do mês (semana no mês da sexta); sem semana registrada no mês, conta os leads marcados (comportamento anterior). Salvar/apagar uma semana recalcula as metas na hora. RPC `set_form_responses_status(uuid[], text)` (até 500 por vez, mesmas permissões da troca individual).
+- [x] **Aba Leads do cliente**: aviso de que o status é opcional; um mês por vez (seletor dos últimos 12 meses); 50 por página com Anterior/Próxima; filtros de status e origem no banco (antes tudo vinha de uma vez e o Supabase cortava em 1.000 linhas); seleção de vários leads + "marcar como" em massa; aviso "Passou de 15 min sem resposta" só no dia em que o lead chegou.
+- [x] Manuais (cliente e gestor) atualizados: status por lead opcional, marcação em massa, aviso de 15 min só no dia.
+- [x] Testes: `fase63-leads-em-massa.spec.ts` (3 leads via webhook, seleção em massa → Qualificado, RLS da RPC em massa). `fase60` passa a contar só os leads da própria conexão (rodava em paralelo com o fase63). tsc, build, unitários e 8 e2e verdes.

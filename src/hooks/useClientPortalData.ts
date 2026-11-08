@@ -498,22 +498,47 @@ export interface LeadResponseRecord {
   utm_content: string | null
 }
 
-export function useLeads() {
+export const LEADS_PAGE_SIZE = 50
+
+export interface LeadsFilters {
+  /** Primeiro dia do mês (YYYY-MM-01). */
+  month: string
+  page: number
+  status: LeadStatus | null
+  source: 'google_forms' | 'site_form' | null
+}
+
+/** Fase 63 — leads de um mês, paginados e filtrados no banco (antes vinham
+ * todos de uma vez: lento com volume alto e cortado em 1.000 linhas pelo
+ * limite padrão do Supabase). */
+export function useLeads({ month, page, status, source }: LeadsFilters) {
   const { clientId } = useAuth()
   return useQuery({
-    queryKey: ['leads', clientId],
+    queryKey: ['leads', clientId, month, page, status, source],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const [year, monthNumber] = month.split('-').map(Number)
+      const next = monthNumber === 12 ? `${year + 1}-01-01` : `${year}-${String(monthNumber + 1).padStart(2, '0')}-01`
+      let query = supabase
         .from('form_responses')
         .select(
           'id, connection_id, submitted_at, status, source, utm_source, utm_campaign, utm_content, form_answers(external_question_id, answer_text)',
+          { count: 'exact' },
         )
         .eq('client_id', clientId as string)
+        // Mês no fuso de Brasília.
+        .gte('submitted_at', `${month}T00:00:00-03:00`)
+        .lt('submitted_at', `${next}T00:00:00-03:00`)
+      if (status) query = query.eq('status', status)
+      if (source) query = query.eq('source', source)
+      const from = page * LEADS_PAGE_SIZE
+      const { data, error, count } = await query
         .order('submitted_at', { ascending: false })
+        .range(from, from + LEADS_PAGE_SIZE - 1)
       if (error) throw error
-      return data as unknown as LeadResponseRecord[]
+      return { leads: data as unknown as LeadResponseRecord[], total: count ?? 0 }
     },
     enabled: !!clientId,
+    placeholderData: (previous) => previous,
   })
 }
 
@@ -599,6 +624,26 @@ export function useSetLeadStatus() {
     },
     onError: () => {
       toast.error('Não foi possível atualizar o status do lead.')
+    },
+  })
+}
+
+/** Fase 63 — marcar vários leads de uma vez (RPC `set_form_responses_status`,
+ * migration-110; mesmas permissões da troca individual). */
+export function useSetLeadsStatusBulk() {
+  const { clientId } = useAuth()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ responseIds, status }: { responseIds: string[]; status: LeadStatus }) => {
+      const { error } = await supabase.rpc('set_form_responses_status', { p_response_ids: responseIds, p_status: status })
+      if (error) throw error
+    },
+    onSuccess: (_data, { responseIds }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', clientId] })
+      toast.success(`${responseIds.length} lead(s) atualizado(s).`)
+    },
+    onError: () => {
+      toast.error('Não foi possível atualizar os leads selecionados.')
     },
   })
 }

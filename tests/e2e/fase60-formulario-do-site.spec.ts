@@ -10,6 +10,7 @@ const FUNCTION_URL = `${process.env.VITE_SUPABASE_URL}/functions/v1/integrations
 let clientId = ''
 let assetId = ''
 let key = ''
+let connectionId = ''
 
 test.beforeAll(async () => {
   const cliente = await getAuthenticatedClient('cliente')
@@ -27,11 +28,12 @@ test.beforeAll(async () => {
   assetId = asset!.id
   const { data: connection } = await gestor
     .from('digital_asset_connections')
-    .select('webhook_key')
+    .select('id, webhook_key')
     .eq('digital_asset_id', assetId)
     .eq('provider', 'site_form')
     .single()
   key = connection!.webhook_key
+  connectionId = connection!.id
 })
 
 test.afterAll(async () => {
@@ -62,7 +64,7 @@ test('teste (&test=1) só interpreta, não cria lead', async () => {
   expect(res.status).toBe(200)
   expect(await res.json()).toMatchObject({ ok: true, test: true, tracking: { utm_source: 'x' } })
   const gestor = await getAuthenticatedClient('gestor')
-  const { count } = await gestor.from('form_responses').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('source', 'site_form')
+  const { count } = await gestor.from('form_responses').select('id', { count: 'exact', head: true }).eq('connection_id', connectionId)
   expect(count).toBe(0)
 })
 
@@ -85,8 +87,7 @@ test('Elementor "Dados avançados" vira lead Novo com UTM; reenvio em 2 min não
   const { data: leads } = await gestor
     .from('form_responses')
     .select('status, source, utm_source, utm_campaign, utm_content, page_url, form_answers(external_question_id, answer_text)')
-    .eq('client_id', clientId)
-    .eq('source', 'site_form')
+    .eq('connection_id', connectionId)
   expect(leads).toHaveLength(1)
   expect(leads![0]).toMatchObject({
     status: 'novo',
@@ -107,7 +108,7 @@ test('modo simples e JSON também viram lead', async () => {
   expect((await post('Nome=Simples&E-mail=simples%40exemplo.com', 'application/x-www-form-urlencoded')).status).toBe(200)
   expect((await post(JSON.stringify({ Nome: 'Json', Telefone: '11966660002' }), 'application/json')).status).toBe(200)
   const gestor = await getAuthenticatedClient('gestor')
-  const { count } = await gestor.from('form_responses').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('source', 'site_form')
+  const { count } = await gestor.from('form_responses').select('id', { count: 'exact', head: true }).eq('connection_id', connectionId)
   expect(count).toBe(3)
 })
 
